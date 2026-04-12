@@ -25,7 +25,7 @@ graph TD
         BgWorker -->|Step 2: Execute & Analyze| Agent2[Agent 2: Quantitative Analyst]
     end
     
-    subgraph Core Backtesting Engine (tools.py)
+    subgraph Core Backtesting Engine
         Agent2 --> Engine[Cross-Sectional Factor Engine]
         Engine -->|Raw Pricing Data| MarketData[(Polygon.io API / Cache)]
         Engine -->|Point-in-Time Matrix| PITFilter[Survivorship-Bias Filter]
@@ -38,7 +38,7 @@ graph TD
     Engine -.->|Outputs JSON Metrics & JSON Plots| Agent2
     Agent2 -->|Writes Analytical Summary| BgWorker
     
-    subgraph Multi-Agent AI Orchestration (cont.)
+    subgraph Multi-Agent AI Orchestration Phase 2
         BgWorker -->|Step 3: Audit Strategy| Agent3[Agent 3: Risk Manager]
         Agent3 -->|Generates Risk Assessment| BgWorker
     end
