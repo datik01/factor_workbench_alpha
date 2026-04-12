@@ -1,0 +1,12 @@
+shiny
+pandas
+plotly
+scipy
+statsmodels
+python-dotenv
+massive-com
+lxml
+beautifulsoup4
+requests
+pyarrow
+numpy
