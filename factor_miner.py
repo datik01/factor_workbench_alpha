@@ -277,7 +277,7 @@ def discover_alpha_factors(
                 
             results.append({
                 "formula": formula_str,
-                "ic_fitness": round(p.fitness_, 4)
+                "fitness_score": round(p.fitness_, 4)
             })
             
         if len(results) >= 5:

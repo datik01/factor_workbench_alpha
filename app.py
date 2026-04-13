@@ -489,7 +489,7 @@ def server(input, output, session):
             for i, r in enumerate(results):
                 cards.append(
                     ui.div(
-                        ui.h5(f"Rank {i+1} | Sharpe/IC Proxy: {r['ic_fitness']:.4f}", class_="agent-label text-success"),
+                        ui.h5(f"Rank {i+1} | Evolution Metric Score: {r['fitness_score']:.4f}", class_="agent-label text-success"),
                         ui.tags.code(r['formula'], style="font-size: 1.15rem; color: #e5e5e5; font-weight: 500;"),
                         class_="agent-card agent-quant mt-2"
                     )
