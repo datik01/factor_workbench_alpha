@@ -628,7 +628,7 @@ def server(input, output, session):
         if res:
             choices = {"None": "None"}
             for i, item in enumerate(res):
-                choices[item["formula"]] = f"Factor {i+1} : {item['formula'][:40]}... (IC: {item['ic_fitness']:.3f})"
+                choices[item["formula"]] = f"Factor {i+1} : {item['formula'][:40]}... (Score: {item['fitness_score']:.3f})"
             ui.update_select("mined_formula_dropdown", choices=choices)
 
     @reactive.Effect
