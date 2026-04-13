@@ -379,7 +379,7 @@ app_ui = ui.page_fluid(
             # Factor Config
             ui.div(
                 ui.h6("Factor Configuration"),
-                ui.input_selectize("themes", tip("Base Analytics", "Pre-configured mathematical alpha vectors to evaluate cross-sectionally."), choices=list(THEMES.keys()), multiple=True, selected=["momentum_1m"]),
+                ui.input_selectize("themes", tip("Base Analytics", "Pre-configured factors to evaluate cross-sectionally."), choices=list(THEMES.keys()), multiple=True, selected=["momentum_1m"]),
                 ui.input_text("custom_formula", tip("🧪 Custom GP Alpha Formula", "Inject an exact mathematical PyGP syntax tree to bypass standard themes."), placeholder="e.g. sqrt(div(Open, Low)) (Overrides themes)"),
                 ui.input_select("mined_formula_dropdown", tip("🧬 Selected Mined Alpha", "Pull winning formulas from the Alpha Miner output."), choices={"None": "None"}, selected="None"),
                 ui.input_switch("invert_factor", tip("Invert Factor (Low to High)", "Reverses sorting logic across all target matrices."), value=False),
