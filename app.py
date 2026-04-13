@@ -350,6 +350,9 @@ label.control-label {
 """
 
 
+def tip(label: str, text: str):
+    return ui.tooltip(ui.span(label, " ", ui.tags.span("❔", style="font-size: 0.85em; opacity: 0.8; cursor: help;")), text)
+
 # ═══════════════════════════════════════════════════════════════
 # UI Layout
 # ═══════════════════════════════════════════════════════════════
@@ -368,7 +371,7 @@ app_ui = ui.page_fluid(
         ui.sidebar(
             # Universe Selection
             ui.div(
-                ui.h6("Universe"),
+                ui.h6(tip("Universe", "The bounded asset ETF proxy index to map and filter historical constituents against.")),
                 ui.input_select("universe_selection", "", choices={"R2K": "Russell 2000 Index", "SP500": "S&P 500 Index", "NDX": "Nasdaq 100 Index"}, selected="R2K"),
                 class_="config-section",
             ),
@@ -376,23 +379,23 @@ app_ui = ui.page_fluid(
             # Factor Config
             ui.div(
                 ui.h6("Factor Configuration"),
-                ui.input_selectize("themes", "Base Analytics", choices=list(THEMES.keys()), multiple=True, selected=["momentum_1m"]),
-                ui.input_text("custom_formula", "🧪 Custom GP Alpha Formula", placeholder="e.g. sqrt(div(Open, Low)) (Overrides themes)"),
-                ui.input_select("mined_formula_dropdown", "🧬 Selected Mined Alpha", choices={"None": "None"}, selected="None"),
-                ui.input_switch("invert_factor", "Invert Factor (Low to High)", value=False),
+                ui.input_selectize("themes", tip("Base Analytics", "Pre-configured mathematical alpha vectors to evaluate cross-sectionally."), choices=list(THEMES.keys()), multiple=True, selected=["momentum_1m"]),
+                ui.input_text("custom_formula", tip("🧪 Custom GP Alpha Formula", "Inject an exact mathematical PyGP syntax tree to bypass standard themes."), placeholder="e.g. sqrt(div(Open, Low)) (Overrides themes)"),
+                ui.input_select("mined_formula_dropdown", tip("🧬 Selected Mined Alpha", "Pull winning formulas from the Alpha Miner output."), choices={"None": "None"}, selected="None"),
+                ui.input_switch("invert_factor", tip("Invert Factor (Low to High)", "Reverses sorting logic across all target matrices."), value=False),
                 class_="config-section",
             ),
 
             # Portfolio Config
             ui.div(
                 ui.h6("Portfolio Configuration"),
-                ui.input_select("strategy_type", "Strategy Type", choices=["Long/Short", "Long Only", "Short Only"]),
-                ui.input_select("quantile_split", "Analysis Quantiles", choices={"3": "Tertiles (3)", "4": "Quartiles (4)", "5": "Quintiles (5)", "10": "Deciles (10)"}, selected="5"),
-                ui.input_slider("portfolio_size", "Portfolio Size",
+                ui.input_select("strategy_type", tip("Strategy Type", "Dictates capitalization allocation (Long/Short neutral, or directional Long/Short only)."), choices=["Long/Short", "Long Only", "Short Only"]),
+                ui.input_select("quantile_split", tip("Analysis Quantiles", "Splits the ranked universe into N fractional buckets to evaluate top vs bottom tier spreads."), choices={"3": "Tertiles (3)", "4": "Quartiles (4)", "5": "Quintiles (5)", "10": "Deciles (10)"}, selected="5"),
+                ui.input_slider("portfolio_size", tip("Portfolio Size", "Maximum number of assets to hold concurrently."),
                                 min=10, max=1000, value=100, step=10),
-                ui.input_numeric("initial_aum", "Initial AUM ($)", value=1000000),
-                ui.input_slider("year_range", "Analysis Period", min=2021, max=datetime.now().year, value=(2021, datetime.now().year), sep=""),
-                ui.input_select("rebalance_freq", "Rebalance Frequency", 
+                ui.input_numeric("initial_aum", tip("Initial AUM ($)", "Starting simulation capital dictating absolute dollar returns."), value=1000000),
+                ui.input_slider("year_range", tip("Analysis Period", "Historical year boundaries for testing."), min=2021, max=datetime.now().year, value=(2021, datetime.now().year), sep=""),
+                ui.input_select("rebalance_freq", tip("Rebalance Frequency", "How often the algorithm recalculates ranks and shifts portfolio capital."), 
                                 choices={"D": "Daily", "M": "Monthly", "Q": "Quarterly", "Y": "Yearly"}, 
                                 selected="D"),
                 class_="config-section",
@@ -470,12 +473,12 @@ def server(input, output, session):
             ),
             
             ui.layout_columns(
-                ui.input_select("miner_universe", "Universe Target", ["R2K", "SP500", "NDX"], selected="SP500"),
-                ui.input_select("miner_horizon", "Optimization Horizon", choices={"1": "Daily (1-Day)", "5": "Weekly (5-Day)", "21": "Monthly (21-Day)", "63": "Quarterly (63-Day)", "252": "Yearly (252-Day)"}, selected="1"),
-                ui.input_select("miner_fitness", "Genetic Fitness Objective", choices={"ic": "Information Coefficient (Rank)", "mae": "Mean Absolute Error (Magnitude)", "sharpe": "Sharpe Ratio (Return/Risk)", "pnl_dd": "Calmar Ratio (PNL / Max Drawdown)"}, selected="ic"),
-                ui.input_select("miner_funcs", "Theoretical Syntax Set", choices={"all": "Unrestricted Matrix (All)", "linear": "Linear Arithmetic (+, -, *, /)", "cross_sectional": "Cross-Sectional Scoring (Rank)", "technical": "Time-Series Technicals (SMA, Delay)"}, selected="all"),
-                ui.input_numeric("miner_generations", "Generational Evolution limits", value=3, min=1, max=10),
-                ui.input_numeric("miner_pop", "Population Tree Map Size", value=100, min=10, max=500),
+                ui.input_select("miner_universe", tip("Universe Target", "The asset pool the genetic engine uses to train its formulas."), ["R2K", "SP500", "NDX"], selected="SP500"),
+                ui.input_select("miner_horizon", tip("Optimization Horizon", "The forward-looking return window the AI attempts to predict."), choices={"1": "Daily (1-Day)", "5": "Weekly (5-Day)", "21": "Monthly (21-Day)", "63": "Quarterly (63-Day)", "252": "Yearly (252-Day)"}, selected="1"),
+                ui.input_select("miner_fitness", tip("Genetic Fitness Objective", "The mathematical risk or accuracy metric the AI maximizes during evolution."), choices={"ic": "Information Coefficient (Rank)", "mae": "Mean Absolute Error (Magnitude)", "sharpe": "Sharpe Ratio (Return/Risk)", "pnl_dd": "Calmar Ratio (PNL / Max Drawdown)"}, selected="ic"),
+                ui.input_select("miner_funcs", tip("Theoretical Syntax Set", "Restricts the AI to only use specific mathematical functions."), choices={"all": "Unrestricted Matrix (All)", "linear": "Linear Arithmetic (+, -, *, /)", "cross_sectional": "Cross-Sectional Scoring (Rank)", "technical": "Time-Series Technicals (SMA, Delay)"}, selected="all"),
+                ui.input_numeric("miner_generations", tip("Generational Evolution limits", "How many times the AI breeds, mutates, and culls the formulas."), value=3, min=1, max=10),
+                ui.input_numeric("miner_pop", tip("Population Tree Map Size", "The number of formulas generated and tested per generation."), value=100, min=10, max=500),
                 col_widths={"sm": (4, 4, 4, 4, 4, 4)}
             ),
 
@@ -854,43 +857,43 @@ def server(input, output, session):
         return ui.div(
             ui.h6("Strategy Performance Metrics", style="color: #ffffff; margin-bottom: 12px; margin-top: 5px; font-weight: 600; font-size: 1.05rem;"),
             ui.layout_columns(
-                ui.value_box("Total Ret ($)", _fmt_doll(m.get('total_ret_usd', 'N/A')),
+                ui.value_box(tip("Total Ret ($)", "Cumulative absolute dollar simulation growth over the tested period."), _fmt_doll(m.get('total_ret_usd', 'N/A')),
                              theme=ui.value_box_theme(bg="#2d3436", fg="white")),
-                ui.value_box("Strategy Ann. Ret", _fmt_pct(m.get('ann_port_return', 'N/A')),
+                ui.value_box(tip("Strategy Ann. Ret", "The geometric average yearly return."), _fmt_pct(m.get('ann_port_return', 'N/A')),
                              theme=ui.value_box_theme(bg="#2d3436", fg="white")),
-                ui.value_box("Strategy Ann Vol", _fmt_pct(m.get('ann_vol', 'N/A')),
+                ui.value_box(tip("Strategy Ann Vol", "Annualized standard deviation outlining generalized expected risk."), _fmt_pct(m.get('ann_vol', 'N/A')),
                              theme=ui.value_box_theme(bg="#2d3436", fg="white")),
-                ui.value_box("Strategy Sharpe", _fmt(m.get('sharpe_ratio', 'N/A')),
+                ui.value_box(tip("Strategy Sharpe", "Risk-adjusted return (Annualized Return divided by Volatility)."), _fmt(m.get('sharpe_ratio', 'N/A')),
                              theme=ui.value_box_theme(bg=_color(m.get('sharpe_ratio'), 0.5, 0), fg="white")),
-                ui.value_box("Strategy Max DD", _fmt_pct(m.get('max_drawdown', 'N/A')),
+                ui.value_box(tip("Strategy Max DD", "Maximum peak-to-trough percentage capital destruction."), _fmt_pct(m.get('max_drawdown', 'N/A')),
                              theme=ui.value_box_theme(bg=_color(m.get('max_drawdown'), -0.15, -0.25, False), fg="white")),
                 gap="12px"
             ),
             
             ui.h6(f"Index Benchmark Metrics ({input.universe_selection()})", style="color: #ffffff; margin-bottom: 12px; margin-top: 20px; font-weight: 600; font-size: 1.05rem;"),
             ui.layout_columns(
-                ui.value_box("Index Total Ret", _fmt_pct(m.get('total_bench_return', 'N/A')), 
+                ui.value_box(tip("Index Total Ret", "Cumulative compound capitalization growth over the benchmark's tested period."), _fmt_pct(m.get('total_bench_return', 'N/A')), 
                              theme=ui.value_box_theme(bg="#2d3436", fg="white")),
-                ui.value_box("Index Ann. Ret", _fmt_pct(m.get('ann_bench_return', 'N/A')), 
+                ui.value_box(tip("Index Ann. Ret", "The geometric average yearly benchmark return."), _fmt_pct(m.get('ann_bench_return', 'N/A')), 
                              theme=ui.value_box_theme(bg="#2d3436", fg="white")),
-                ui.value_box("Index Sharpe", _fmt(m.get('bench_sharpe', 'N/A')),
+                ui.value_box(tip("Index Sharpe", "Risk-adjusted return (Annualized Return divided by Volatility)."), _fmt(m.get('bench_sharpe', 'N/A')),
                              theme=ui.value_box_theme(bg=_color(m.get('bench_sharpe', 0), 0.5, 0), fg="white")),
-                ui.value_box("Index Max DD", _fmt_pct(m.get('bench_max_dd', 'N/A')),
+                ui.value_box(tip("Index Max DD", "Maximum peak-to-trough percentage capital destruction."), _fmt_pct(m.get('bench_max_dd', 'N/A')),
                              theme=ui.value_box_theme(bg=_color(m.get('bench_max_dd', 0), -0.15, -0.25, False), fg="white")),
                 gap="12px"
             ),
             
             ui.h6("Factor & Execution Analytics", style="color: #ffffff; margin-bottom: 12px; margin-top: 20px; font-weight: 600; font-size: 1.05rem;"),
             ui.layout_columns(
-                ui.value_box("Ann. Alpha", _fmt_pct(m.get('ann_alpha', 'N/A')),
+                ui.value_box(tip("Ann. Alpha", "Annualized excess return generated above the underlying benchmark index."), _fmt_pct(m.get('ann_alpha', 'N/A')),
                              theme=ui.value_box_theme(bg=_color(m.get('ann_alpha'), 0.01, -0.01), fg="white")),
-                ui.value_box("Portfolio Beta", _fmt(m.get('port_beta', 'N/A')),
+                ui.value_box(tip("Portfolio Beta", "Systematic relative volatility mapping structural correlation to the index."), _fmt(m.get('port_beta', 'N/A')),
                              theme=ui.value_box_theme(bg="#2d3436", fg="white")),
-                ui.value_box("Mean IC", _fmt(m.get('mean_ic', 'N/A')),
+                ui.value_box(tip("Mean IC", "Information Coefficient. The average rank correlation between predictions and actual forward returns."), _fmt(m.get('mean_ic', 'N/A')),
                              theme=ui.value_box_theme(bg=_color(m.get('mean_ic'), 0.02, 0), fg="white")),
-                ui.value_box("IC IR", _fmt(m.get('ic_ir', 'N/A')),
+                ui.value_box(tip("IC IR", "Information Ratio of the IC. Determines the consistency of the predictive edge."), _fmt(m.get('ic_ir', 'N/A')),
                              theme=ui.value_box_theme(bg=_color(m.get('ic_ir'), 0.3, 0), fg="white")),
-                ui.value_box("Universe Size", f"{m.get('n_tickers', '?')}",
+                ui.value_box(tip("Universe Size", "Total number of active assets analyzed in the final rebalance."), f"{m.get('n_tickers', '?')}",
                              theme=ui.value_box_theme(bg="#2d3436", fg="white")),
                 gap="12px"
             )
