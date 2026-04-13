@@ -66,7 +66,9 @@ graph TD
 
 3. **Genetic Alpha Miner (`factor_miner.py`)**:
     - Deploys Symbolic Regression via `gplearn` to autonomously evolve custom, non-linear analytical alpha formulas evaluating rolling factors.
-    - Allows dynamic extraction of custom quantitative expressions against multi-horizon target parameters to maximize predictive fitness.
+    - **Algorithmic Expansion**: Allows dynamic routing directly targeting custom, high-performance C-level Numpy vector fitness constraints tracking **Sharpe Ratio** and **Calmar Ratio (PNL/Max Drawdown)**, escaping native `pandas` matrix lag.
+    - **Theoretical Syntax Sets**: Exposes granular parameter control dictating exact structural capabilities to the AI (e.g. *Linear Arithmetic*, *Cross-Sectional Scoring*, *Time-Series Momentum* arrays).
+    - Features strict **Parsimony Penalties** avoiding massive hallucinatory curve-fitting nested trees.
 
 4. **High-Performance Backtest Engine (`tools.py`)**:
     - Fully vectorized multi-factor arrays evaluating Momentum, Mean Reversion, Volatility, Volume profiles, and Size.
