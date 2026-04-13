@@ -164,7 +164,7 @@ def fetch_universe_data(
             if progress_callback and completed % 25 == 0:
                 progress_callback(
                     completed, total, nonlocal_ticker,
-                    f"📡 {completed}/{total} fetched ({failed} failed)"
+                    f"📡 {completed}/{total} records verified ({failed} missing/delisted)"
                 )
 
     if not all_frames:
@@ -178,7 +178,7 @@ def fetch_universe_data(
 
     if progress_callback:
         n = universe["ticker"].nunique()
-        progress_callback(n, n, "", f"✅ {n}/{total} tickers loaded ({failed} failed)")
+        progress_callback(n, n, "", f"✅ {n}/{total} cross-sections loaded ({failed} missing/delisted)")
 
     return universe
 
@@ -200,10 +200,38 @@ def execute_gplearn_formula(df: pd.DataFrame, formula_str: str) -> np.ndarray:
     def log(a): return np.log(np.abs(a) + 1e-5)
     def rank(a): return pd.Series(a).rank(pct=True).values
 
+    # Temporal boundary maps ensuring bleeding doesn't occur across tickers
+    t_mask_5 = (df['ticker'] != df['ticker'].shift(5)).values
+    t_mask_10 = (df['ticker'] != df['ticker'].shift(9)).values
+    t_mask_20 = (df['ticker'] != df['ticker'].shift(19)).values
+    
+    def delay_5(a):
+        r = np.roll(a, 5)
+        r[:5] = a[:5]; r[t_mask_5] = a[t_mask_5]
+        return r
+    def sma_10(a):
+        r = pd.Series(a).rolling(10).mean().bfill().values
+        r[t_mask_10] = a[t_mask_10]
+        return r
+    def sma_20(a):
+        r = pd.Series(a).rolling(20).mean().bfill().values
+        r[t_mask_20] = a[t_mask_20]
+        return r
+    def ts_max_20(a):
+        r = pd.Series(a).rolling(20).max().bfill().values
+        r[t_mask_20] = a[t_mask_20]
+        return r
+    def ts_min_20(a):
+        r = pd.Series(a).rolling(20).min().bfill().values
+        r[t_mask_20] = a[t_mask_20]
+        return r
+
     # Pre-parse memory bindings matching factor_miner's target states
     env = {
         "add": add, "sub": sub, "mul": mul, "div": div,
         "abs": abs_f, "sqrt": sqrt, "log": log, "rank": rank,
+        "delay_5": delay_5, "sma_10": sma_10, "sma_20": sma_20, 
+        "ts_max_20": ts_max_20, "ts_min_20": ts_min_20,
         "Open": df["open"].values,
         "High": df["high"].values,
         "Low": df["low"].values,
