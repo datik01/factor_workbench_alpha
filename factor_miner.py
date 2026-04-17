@@ -189,12 +189,20 @@ def discover_alpha_factors(
     if "fwd_return" not in df.columns:
         df["fwd_return"] = df.groupby("ticker")["close"].shift(-horizon) / df["close"] - 1
         
+    if "vwap" in df.columns:
+        df["vwap"] = df["vwap"].fillna(df["close"])
+    if "trades" in df.columns:
+        df["trades"] = df["trades"].fillna(1)
+        
     df = df.dropna(subset=["open", "high", "low", "close", "volume", "fwd_return"])
     
     features = ["open", "high", "low", "close", "volume", "returns"]
+    if "vwap" in df.columns: features.append("vwap")
+    if "trades" in df.columns: features.append("trades")
+    
     if "returns" not in df.columns:
         df["returns"] = df.groupby("ticker")["close"].pct_change()
-    df.dropna(inplace=True)
+    df.dropna(subset=features + ["fwd_return"], inplace=True)
         
     X = df[features].values
     y = df["fwd_return"].values
