@@ -265,6 +265,9 @@ def _compute_factor_scores(universe: pd.DataFrame, themes: list, custom_formula:
             progress_callback(50, 100, "", f"Injecting abstract GP Formula internally: {custom_formula}")
         df["factor_score"] = execute_gplearn_formula(df, custom_formula)
         df = df.dropna(subset=["factor_score", "fwd_return"])
+        # Inject deterministic jitter immediately to break zero-variance dead formulas globally
+        np.random.seed(42)
+        df["factor_score"] += np.random.normal(0, 1e-12, size=len(df))
         df["factor_rank"] = df.groupby("date")["factor_score"].rank(pct=True)
         return df
 
