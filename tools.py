@@ -590,7 +590,10 @@ def run_cross_sectional_backtest(
         
         # Mean fraction of the portfolio rotated on any given day
         daily_turnover_fraction = (daily_trades / 2.0) / daily_gross.replace(0, np.nan)
-        ann_turnover = daily_turnover_fraction.fillna(0).mean() * 252  # Annualized turnover rate
+        
+        # Isolate days where trades physically occurred to decouple from manual configuration frequencies
+        active_turnover = daily_turnover_fraction[daily_turnover_fraction > 1e-4]
+        avg_turnover = active_turnover.mean() if not active_turnover.empty else 0.0
 
         # Regression
         sample = scored.sample(n=min(10000, len(scored)), random_state=42)
@@ -728,7 +731,7 @@ def run_cross_sectional_backtest(
             "bench_max_dd": round(bench_max_dd, 4),
             "universe_size": int(n_unique),
             "ann_vol": round(ann_vol, 4),
-            "ann_turnover": round(float(ann_turnover), 3),
+            "avg_turnover": round(float(avg_turnover), 3),
             "port_beta": round(port_beta, 3),
             "total_ret_usd": round(total_ret_usd, 2),
             "quintile_returns": {str(k): round(v, 4) for k, v in q_returns.items()}
