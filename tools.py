@@ -239,6 +239,8 @@ def execute_gplearn_formula(df: pd.DataFrame, formula_str: str) -> np.ndarray:
         "Low": df["low"].values,
         "Close": df["close"].values,
         "Volume": df["volume"].values,
+        "VWAP": df["vwap"].values if "vwap" in df.columns else df["close"].values,
+        "Trades": df["trades"].values if "trades" in df.columns else np.ones(len(df)),
         "Returns": df["daily_return"].values if "daily_return" in df.columns else np.zeros(len(df))
     }
     
