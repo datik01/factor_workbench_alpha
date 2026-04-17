@@ -472,7 +472,9 @@ def run_cross_sectional_backtest(
             scored.loc[scored["short_rank"] <= leg_size, "position"] = -1.0
 
         if rebalance_freq != "D":
-            if rebalance_freq == "M":
+            if rebalance_freq == "W":
+                period_dt = scored['date'].dt.to_period("W")
+            elif rebalance_freq == "M":
                 period_dt = scored['date'].dt.to_period("M")
             elif rebalance_freq == "Q":
                 period_dt = scored['date'].dt.to_period("Q")

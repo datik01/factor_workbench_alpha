@@ -396,7 +396,7 @@ app_ui = ui.page_fluid(
                 ui.input_numeric("initial_aum", tip("Initial AUM ($)", "Starting simulation capital dictating absolute dollar returns."), value=1000000),
                 ui.input_slider("year_range", tip("Analysis Period", "Historical year boundaries for testing."), min=2021, max=datetime.now().year, value=(2021, datetime.now().year), sep=""),
                 ui.input_select("rebalance_freq", tip("Rebalance Frequency", "How often the algorithm recalculates ranks and shifts portfolio capital."), 
-                                choices={"D": "Daily", "M": "Monthly", "Q": "Quarterly", "Y": "Yearly"}, 
+                                choices={"D": "Daily", "W": "Weekly", "M": "Monthly", "Q": "Quarterly", "Y": "Yearly"}, 
                                 selected="D"),
                 class_="config-section",
             ),
