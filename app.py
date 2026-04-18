@@ -751,7 +751,7 @@ def server(input, output, session):
             try:
                 nonlocal dynamic_tickers, timeline
                 if cache_needs_rebuild:
-                    ui_progress(0, 0, "", "⚠️ Cache is empty! Forcing a full rebuild from SEC EDGAR. This will take ~5-10 minutes...")
+                    ui_progress(0, 0, "", "⚠️ Cache is empty! Forcing a full rebuild from SEC EDGAR + Massive APIs. This will take ~5-10 minutes...")
                     from constituents.universe_builder import build_historical_constituents, get_latest_constituents, build_constituent_timeline
                     
                     master_df = build_historical_constituents(
