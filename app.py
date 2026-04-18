@@ -930,8 +930,8 @@ def server(input, output, session):
             
             ui.h6(f"Live Target Execution (Latest Date: {m.get('latest_date', 'N/A')})", style="color: #ffffff; margin-bottom: 12px; margin-top: 20px; font-weight: 600; font-size: 1.05rem;"),
             ui.layout_columns(
-                ui.value_box("Buy (Long Leg)", "", ui.tags.div(", ".join(m.get('current_longs', [])) if m.get('current_longs') else "None", style="font-size: 0.95rem; word-break: break-word; color: #000; font-weight: 600;"), theme=ui.value_box_theme(bg="#00d4aa", fg="black")),
-                ui.value_box("Sell (Short Leg)", "", ui.tags.div(", ".join(m.get('current_shorts', [])) if m.get('current_shorts') else "None", style="font-size: 0.95rem; word-break: break-word; color: #fff; font-weight: 600;"), theme=ui.value_box_theme(bg="#ff4a4a", fg="white")),
+                ui.div(ui.value_box("Buy (Long Leg)", "", ui.tags.div(", ".join(m.get('current_longs', [])) if m.get('current_longs') else "None", style="font-size: 0.95rem; word-break: break-word; color: #ffffff; font-weight: 600;"), theme=ui.value_box_theme(bg="#1a1e28", fg="white")), style="border: 2px solid #00d4aa; border-radius: 10px; overflow: hidden;"),
+                ui.div(ui.value_box("Sell (Short Leg)", "", ui.tags.div(", ".join(m.get('current_shorts', [])) if m.get('current_shorts') else "None", style="font-size: 0.95rem; word-break: break-word; color: #ffffff; font-weight: 600;"), theme=ui.value_box_theme(bg="#1a1e28", fg="white")), style="border: 2px solid #ff4a4a; border-radius: 10px; overflow: hidden;"),
                 gap="12px"
             )
         )
