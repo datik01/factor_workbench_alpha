@@ -125,7 +125,9 @@ cs_rank_func = make_function(function=_cs_rank, name='rank', arity=1)
 
 GLOBAL_MASK_5 = None
 GLOBAL_MASK_10 = None
+GLOBAL_MASK_14 = None
 GLOBAL_MASK_20 = None
+GLOBAL_MASK_26 = None
 
 def _ts_delay_5(x):
     if GLOBAL_MASK_5 is None: return np.zeros_like(x)
@@ -157,11 +159,41 @@ def _ts_min_20(x):
     res[GLOBAL_MASK_20] = np.nan
     return np.nan_to_num(res)
 
+def _ts_rsi_14(x):
+    if GLOBAL_MASK_14 is None: return np.zeros_like(x) + 50.0
+    delta = pd.Series(np.nan_to_num(x)).diff()
+    gain = (delta.where(delta > 0, 0)).fillna(0)
+    loss = (-delta.where(delta < 0, 0)).fillna(0)
+    avg_gain = gain.rolling(14).mean().bfill()
+    avg_loss = loss.rolling(14).mean().bfill()
+    rs = avg_gain / avg_loss.replace(0, 1e-5)
+    rsi = 100 - (100 / (1 + rs))
+    res = rsi.values
+    res[GLOBAL_MASK_14] = 50.0
+    return np.nan_to_num(res)
+
+def _ts_macd_line(x):
+    if GLOBAL_MASK_26 is None: return np.zeros_like(x)
+    sema = pd.Series(np.nan_to_num(x)).ewm(span=12, adjust=False).mean()
+    lema = pd.Series(np.nan_to_num(x)).ewm(span=26, adjust=False).mean()
+    res = (sema - lema).values
+    res[GLOBAL_MASK_26] = 0.0
+    return np.nan_to_num(res)
+
+def _ts_vol_20(x):
+    if GLOBAL_MASK_20 is None: return np.zeros_like(x)
+    res = pd.Series(np.nan_to_num(x)).rolling(20).std().bfill().values
+    res[GLOBAL_MASK_20] = 0.0
+    return np.nan_to_num(res)
+
 delay_5 = make_function(function=_ts_delay_5, name='delay_5', arity=1)
 sma_10 = make_function(function=_ts_sma_10, name='sma_10', arity=1)
 sma_20 = make_function(function=_ts_sma_20, name='sma_20', arity=1)
 ts_max_20 = make_function(function=_ts_max_20, name='ts_max_20', arity=1)
 ts_min_20 = make_function(function=_ts_min_20, name='ts_min_20', arity=1)
+rsi_14 = make_function(function=_ts_rsi_14, name='rsi_14', arity=1)
+macd_line = make_function(function=_ts_macd_line, name='macd_line', arity=1)
+vol_20 = make_function(function=_ts_vol_20, name='vol_20', arity=1)
 
 # ═══════════════════════════════════════════════════════════════
 # Factor Miner Execution Matrix
@@ -208,10 +240,12 @@ def discover_alpha_factors(
     y = df["fwd_return"].values
     
     # ── Temporal Boundary Masks ──
-    global GLOBAL_MASK_5, GLOBAL_MASK_10, GLOBAL_MASK_20
+    global GLOBAL_MASK_5, GLOBAL_MASK_10, GLOBAL_MASK_14, GLOBAL_MASK_20, GLOBAL_MASK_26
     GLOBAL_MASK_5 = (df['ticker'] != df['ticker'].shift(5)).values
     GLOBAL_MASK_10 = (df['ticker'] != df['ticker'].shift(9)).values  # 10-day rolling needs 9 prior days blanked
+    GLOBAL_MASK_14 = (df['ticker'] != df['ticker'].shift(13)).values # 14-day rolling 
     GLOBAL_MASK_20 = (df['ticker'] != df['ticker'].shift(19)).values # 20-day rolling needs 19 prior days blanked
+    GLOBAL_MASK_26 = (df['ticker'] != df['ticker'].shift(25)).values # 26-day rolling
     
     # Encode dates into integer IDs explicitly for passing through `sample_weight` mapping natively
     w = df["date"].astype('category').cat.codes.values
@@ -225,9 +259,9 @@ def discover_alpha_factors(
     elif syntax_set == "cross_sectional":
         function_set = ['add', 'sub', 'mul', 'div', 'abs', cs_rank_func]
     elif syntax_set == "technical":
-        function_set = ['add', 'sub', 'mul', 'div', delay_5, sma_10, sma_20, ts_max_20, ts_min_20]
+        function_set = ['add', 'sub', 'mul', 'div', delay_5, sma_10, sma_20, ts_max_20, ts_min_20, rsi_14, macd_line, vol_20]
     else:
-        function_set = ['add', 'sub', 'mul', 'div', 'abs', 'log', 'sqrt', cs_rank_func, delay_5, sma_10, sma_20, ts_max_20, ts_min_20]
+        function_set = ['add', 'sub', 'mul', 'div', 'abs', 'log', 'sqrt', cs_rank_func, delay_5, sma_10, sma_20, ts_max_20, ts_min_20, rsi_14, macd_line, vol_20]
     
     if fitness_metric == "ic": target_metric = ic_fitness
     elif fitness_metric == "sharpe": target_metric = sharpe_fitness
