@@ -711,8 +711,16 @@ def run_cross_sectional_backtest(
             xaxis_title="Date", yaxis_title="Drawdown",
             template="plotly_dark", height=300,
         )
+        # Extract Live Triggers (Latest Date)
+        latest_date = scored["date"].max()
+        latest_cross_section = scored[scored["date"] == latest_date]
+        current_longs = latest_cross_section[latest_cross_section["position"] == 1.0]["ticker"].tolist()
+        current_shorts = latest_cross_section[latest_cross_section["position"] == -1.0]["ticker"].tolist()
 
         metrics = {
+            "latest_date": latest_date.strftime("%Y-%m-%d"),
+            "current_longs": current_longs,
+            "current_shorts": current_shorts,
             "sharpe_ratio": round(sharpe, 3),
             "ann_alpha": round(alpha, 4),
             "ann_port_return": round(ann_port, 4),

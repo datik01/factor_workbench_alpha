@@ -902,6 +902,13 @@ def server(input, output, session):
                 ui.value_box(tip("Universe Size", "Total number of active assets analyzed in the final rebalance."), f"{m.get('n_tickers', '?')}",
                              theme=ui.value_box_theme(bg="#2d3436", fg="white")),
                 gap="12px"
+            ),
+            
+            ui.h6(f"Live Target Execution (Latest Date: {m.get('latest_date', 'N/A')})", style="color: #ffffff; margin-bottom: 12px; margin-top: 20px; font-weight: 600; font-size: 1.05rem;"),
+            ui.layout_columns(
+                ui.value_box("Buy (Long Leg)", "", ui.tags.div(", ".join(m.get('current_longs', [])) if m.get('current_longs') else "None", style="font-size: 0.95rem; word-break: break-word; color: #000; font-weight: 600;"), theme=ui.value_box_theme(bg="#00d4aa", fg="black")),
+                ui.value_box("Sell (Short Leg)", "", ui.tags.div(", ".join(m.get('current_shorts', [])) if m.get('current_shorts') else "None", style="font-size: 0.95rem; word-break: break-word; color: #fff; font-weight: 600;"), theme=ui.value_box_theme(bg="#ff4a4a", fg="white")),
+                gap="12px"
             )
         )
 
