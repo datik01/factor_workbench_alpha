@@ -197,7 +197,9 @@ def execute_gplearn_formula(df: pd.DataFrame, formula_str: str) -> np.ndarray:
     def add(a, b): return a + b
     def sub(a, b): return a - b
     def mul(a, b): return a * b
-    def div(a, b): return np.where(np.abs(b) < 1e-6, 1.0, a / b)
+    def div(a, b):
+        b_safe = np.where(np.abs(b) < 1e-6, 1.0, b)
+        return np.where(np.abs(b) < 1e-6, 1.0, a / b_safe)
     def abs_f(a): return np.abs(a)
     def sqrt(a): return np.sqrt(np.abs(a))
     def log(a): return np.log(np.abs(a) + 1e-5)
