@@ -564,11 +564,11 @@ def run_cross_sectional_backtest(
         bench_drawdown = cum_bench / rolling_max_bench - 1
         bench_max_dd = bench_drawdown.min()
 
-        # Information Coefficient
-        ic_by_day = scored.groupby("date").apply(
-            lambda g: g["factor_score"].corr(g["fwd_return"], method="spearman")
-            if len(g) > 5 else np.nan
-        ).dropna()
+        # Information Coefficient (Vectorized Pearson on native percentiles == Spearman)
+        scored["fwd_return_rank"] = scored.groupby("date")["fwd_return"].rank(pct=True)
+        # Bypasses the catastrophic python lambda apply loop by using C-level cov/corr matrices
+        corr_matrix = scored.groupby("date")[["factor_rank", "fwd_return_rank"]].corr()
+        ic_by_day = corr_matrix.xs("factor_rank", level=1)["fwd_return_rank"].dropna()
         mean_ic = ic_by_day.mean()
         ic_ir = mean_ic / ic_by_day.std() if ic_by_day.std() > 0 else 0
 
