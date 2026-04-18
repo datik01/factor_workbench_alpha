@@ -717,8 +717,10 @@ def run_cross_sectional_backtest(
         current_longs = latest_cross_section[latest_cross_section["position"] == 1.0]["ticker"].tolist()
         current_shorts = latest_cross_section[latest_cross_section["position"] == -1.0]["ticker"].tolist()
 
+        latest_date_str = latest_date.strftime("%Y-%m-%d") if hasattr(latest_date, 'strftime') else str(latest_date)[:10]
+
         metrics = {
-            "latest_date": latest_date.strftime("%Y-%m-%d"),
+            "latest_date": latest_date_str,
             "current_longs": current_longs,
             "current_shorts": current_shorts,
             "sharpe_ratio": round(sharpe, 3),
