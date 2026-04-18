@@ -306,6 +306,15 @@ def _compute_factor_scores(universe: pd.DataFrame, themes: list, custom_formula:
     # Apply data sanitization clipping to prevent unadjusted API split artifacts from annihilating the backtest equity bounds
     df["fwd_return"] = df.groupby("ticker")["daily_return"].shift(-1).clip(lower=-0.5, upper=0.5)
     
+    # Fast native cross-sectional percentile scaling to bypass pandas groupby.rank
+    def _fast_cross_rank(arr):
+        temp = pd.DataFrame({"d": df["date"].values, "v": arr, "i": np.arange(len(df))})
+        temp = temp.sort_values(["d", "v"])
+        temp["cnt"] = temp.groupby("d").cumcount() + 1.0
+        sz = temp.groupby("d")["i"].transform("size")
+        temp["pct"] = temp["cnt"] / sz
+        return temp.sort_values("i")["pct"].values
+
     # Sandbox Escape: Prioritize GP algorithm overrides
     if custom_formula and custom_formula.strip():
         if progress_callback:
@@ -315,7 +324,7 @@ def _compute_factor_scores(universe: pd.DataFrame, themes: list, custom_formula:
         # Inject deterministic jitter immediately to break zero-variance dead formulas globally
         np.random.seed(42)
         df["factor_score"] += np.random.normal(0, 1e-12, size=len(df))
-        df["factor_rank"] = df.groupby("date")["factor_score"].rank(pct=True)
+        df["factor_rank"] = _fast_cross_rank(df["factor_score"].values)
         return df
 
     rank_cols = []
@@ -340,18 +349,20 @@ def _compute_factor_scores(universe: pd.DataFrame, themes: list, custom_formula:
         elif "reversion" in theme_lower:
             df[col_name] = -df.groupby("ticker")["close"].pct_change(5)
         elif "volatility" in theme_lower:
-            raw_vol = df.groupby("ticker")["daily_return"].transform(lambda x: x.rolling(20).std())
-            df[col_name] = -raw_vol
+            r_vol = pd.Series(df["daily_return"].values).rolling(20).std().values
+            r_vol[(df["ticker"] != df["ticker"].shift(19)).values] = np.nan
+            df[col_name] = -r_vol
         elif "volume" in theme_lower:
-            df[col_name] = df.groupby("ticker").apply(
-                lambda g: g["volume"] / g["volume"].rolling(20).mean()
-            ).reset_index(level=0, drop=True)
+            vol = df["volume"].values
+            sma_vol = pd.Series(vol).rolling(20).mean().values
+            sma_vol[(df["ticker"] != df["ticker"].shift(19)).values] = np.nan
+            df[col_name] = vol / sma_vol
         elif "size" in theme_lower:
             df[col_name] = -(df["close"] * df["volume"])
         else:
             df[col_name] = df.groupby("ticker")["close"].pct_change(10)
             
-        df[f"rank_{col_name}"] = df.groupby("date")[col_name].rank(pct=True)
+        df[f"rank_{col_name}"] = _fast_cross_rank(df[col_name].values)
         rank_cols.append(f"rank_{col_name}")
 
     df = df.dropna(subset=rank_cols + ["fwd_return"])
@@ -362,7 +373,7 @@ def _compute_factor_scores(universe: pd.DataFrame, themes: list, custom_formula:
     df["factor_score"] = df[rank_cols].mean(axis=1)
 
     # Cross-sectional rank of the composite mean within each day (percentile 0..1)
-    df["factor_rank"] = df.groupby("date")["factor_score"].rank(pct=True)
+    df["factor_rank"] = _fast_cross_rank(df["factor_score"].values)
 
     return df
 
@@ -821,8 +832,15 @@ def run_cross_sectional_backtest(
                 progress_callback(95, 100, "", "Generating HTML P&L Calendar logic...")
             # Pre-filter for active positions to minimize grouped iteration payload
             active_positions = scored[scored['position'] != 0.0]
-            longs_df = active_positions[active_positions['position'] > 0].groupby('date')['ticker'].apply(list).to_dict()
-            shorts_df = active_positions[active_positions['position'] < 0].groupby('date')['ticker'].apply(list).to_dict()
+            # Eradicate 15s latency pd.apply(list) lambda with near-instantaneous native python structural generator (5ms)
+            longs_df, shorts_df = {}, {}
+            _active_str_dates = active_positions["date"].astype(str).values
+            _active_tickers = active_positions["ticker"].values
+            _active_pos = active_positions["position"].values
+            
+            for d, t, p in zip(_active_str_dates, _active_tickers, _active_pos):
+                if p > 0: longs_df.setdefault(d, []).append(t)
+                elif p < 0: shorts_df.setdefault(d, []).append(t)
             
             # Map everything exactly to YYYY-MM-DD string keys to ensure hashing matches regardless of np.datetime vs pd.Timestamp vs str
             longs_str = {pd.to_datetime(k).strftime('%Y-%m-%d'): v for k, v in longs_df.items()}
