@@ -124,6 +124,7 @@ def run_agentic_workflow(
     constituent_timeline: dict = None,
     benchmark_ticker: str = "IWM",
     quantiles: int = 5,
+    enable_calendar: bool = True,
 ) -> dict:
     """
     Executes the three-agent pipeline with cross-sectional portfolio construction.
@@ -166,6 +167,7 @@ def run_agentic_workflow(
         constituent_timeline=constituent_timeline,
         benchmark_ticker=benchmark_ticker,
         quantiles=quantiles,
+        enable_calendar=enable_calendar,
     )
     tool_data = json.loads(tool_result_str)
 
