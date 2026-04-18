@@ -19,7 +19,7 @@ warnings.filterwarnings('ignore', category=UserWarning)
 
 ENFORCE_MONOTONICITY = False
 
-def _check_monotonicity_penalty(y_m, pred_m):
+def _check_monotonicity_penalty(y_m, pred_m, w_m):
     """
     C-level vectorized Quintile binning to ensure [Q1_ret, Q2_ret, Q3_ret, Q4_ret, Q5_ret] is monotonically increasing.
     Returns 1.0 if highly monotonic (Spearman > 0.8), else 0.0 (death penalty).
@@ -28,15 +28,27 @@ def _check_monotonicity_penalty(y_m, pred_m):
         return 1.0
         
     try:
+        # Cross-sectionally normalize pred_m using w_m (Date Groups) natively in C
+        counts = np.bincount(w_m)
+        counts_safe = np.where(counts == 0, 1, counts)
+        
+        pred_means = np.bincount(w_m, weights=pred_m) / counts_safe
+        pred_sq_means = np.bincount(w_m, weights=pred_m**2) / counts_safe
+        pred_vars = pred_sq_means - pred_means**2
+        pred_stds = np.sqrt(np.maximum(pred_vars, 1e-8))
+        
+        # Daily Cross-Sectional Z-Score!
+        pred_z = (pred_m - pred_means[w_m]) / pred_stds[w_m]
+        
         # Reject mathematically stagnant matrices (constants/0-variance)
-        if np.var(pred_m) < 1e-6: return 0.0
+        if np.var(pred_z) < 1e-6: return 0.0
         
         # 1-pass extraction of 4 decile bounds
-        boundaries = np.quantile(pred_m, [0.2, 0.4, 0.6, 0.8])
+        boundaries = np.quantile(pred_z, [0.2, 0.4, 0.6, 0.8])
         # Reject over-saturated trees that collapse bins
         if len(np.unique(boundaries)) < 4: return 0.0
             
-        bins = np.digitize(pred_m, boundaries)
+        bins = np.digitize(pred_z, boundaries)
         counts = np.bincount(bins)
         if np.any(counts == 0): return 0.0
         
@@ -86,7 +98,7 @@ def _ic_metric(y, y_pred, w):
     if np.isnan(r):
         return 0.0
         
-    penalty = _check_monotonicity_penalty(y_m, pred_m)
+    penalty = _check_monotonicity_penalty(y_m, pred_m, w_m)
     return abs(r) * penalty
 
 # Map metric to gplearn
@@ -112,7 +124,7 @@ def _sharpe_metric(y, y_pred, w):
     std = np.std(daily_pnl)
     if std < 1e-6: return 0.0
     
-    penalty = _check_monotonicity_penalty(y_m, pred_m)
+    penalty = _check_monotonicity_penalty(y_m, pred_m, w_m)
     return (np.mean(daily_pnl) / std) * penalty
 
 def _pnl_dd_metric(y, y_pred, w):
@@ -142,7 +154,7 @@ def _pnl_dd_metric(y, y_pred, w):
     
     if total_pnl <= 0: return total_pnl
     
-    penalty = _check_monotonicity_penalty(y_m, pred_m)
+    penalty = _check_monotonicity_penalty(y_m, pred_m, w_m)
     return (total_pnl / (max_dd + 1e-4)) * penalty
 
 sharpe_fitness = make_fitness(function=_sharpe_metric, greater_is_better=True)
