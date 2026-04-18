@@ -723,14 +723,21 @@ def run_cross_sectional_backtest(
                 progress_callback(95, 100, "", "Generating HTML P&L Calendar logic...")
             # Pre-filter for active positions to minimize grouped iteration payload
             active_positions = scored[scored['position'] != 0.0]
-            longs_df = active_positions[active_positions['position'] == 1.0].groupby('date')['ticker'].apply(list).to_dict()
-            shorts_df = active_positions[active_positions['position'] == -1.0].groupby('date')['ticker'].apply(list).to_dict()
+            longs_df = active_positions[active_positions['position'] > 0].groupby('date')['ticker'].apply(list).to_dict()
+            shorts_df = active_positions[active_positions['position'] < 0].groupby('date')['ticker'].apply(list).to_dict()
             
-            # O(1) dictionary routing natively outpaces Python looping overheads
-            daily_holdings = {
-                pd.to_datetime(d): {"longs": longs_df.get(d, []), "shorts": shorts_df.get(d, [])}
-                for d in active_positions['date'].unique()
-            }
+            # Map everything exactly to YYYY-MM-DD string keys to ensure hashing matches regardless of np.datetime vs pd.Timestamp vs str
+            longs_str = {pd.to_datetime(k).strftime('%Y-%m-%d'): v for k, v in longs_df.items()}
+            shorts_str = {pd.to_datetime(k).strftime('%Y-%m-%d'): v for k, v in shorts_df.items()}
+            
+            daily_holdings = {}
+            for d in active_positions['date'].unique():
+                dt_key = pd.to_datetime(d)
+                str_key = dt_key.strftime('%Y-%m-%d')
+                daily_holdings[dt_key] = {
+                    "longs": longs_str.get(str_key, []),
+                    "shorts": shorts_str.get(str_key, [])
+                }
             calendar_html_out = generate_pnl_calendar_html(strat_ret, daily_holdings)
 
         latest_date_str = latest_date.strftime("%Y-%m-%d") if hasattr(latest_date, 'strftime') else str(latest_date)[:10]
