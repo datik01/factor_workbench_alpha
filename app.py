@@ -398,7 +398,8 @@ app_ui = ui.page_fluid(
                 ui.input_slider("year_range", tip("Analysis Period", "Historical year boundaries for testing."), min=2021, max=datetime.now().year, value=(2021, datetime.now().year), sep=""),
                 ui.input_select("rebalance_freq", tip("Rebalance Frequency", "How often the algorithm recalculates ranks and shifts portfolio capital."), 
                                 choices={"D": "Daily", "W": "Weekly", "M": "Monthly", "Q": "Quarterly", "Y": "Yearly"}, 
-                                selected="D"),
+                                selected="M"),
+                ui.input_switch("enable_agents", tip("Enable LLM Analysis Agents", "Triggers 3 local Ollama models to review your backest. WARNING: Takes 3-5 minutes! Disable for instant speed."), value=False),
                 class_="config-section",
             ),
 
@@ -710,6 +711,7 @@ def server(input, output, session):
         strategy_type = input.strategy_type()
         quantile_split = int(input.quantile_split())
         enable_cal_val = input.enable_calendar()
+        enable_agents_val = input.enable_agents()
 
         if custom_formula_opt:
             status_msg.set(f"Initializing Automated Custom Alpha Formula composite...")
@@ -824,6 +826,7 @@ def server(input, output, session):
                     benchmark_ticker=benchmark_ticker,
                     quantiles=quantile_split,
                     enable_calendar=enable_cal_val,
+                    enable_agents=enable_agents_val,
                 )
                 progress_state["res"] = res
             except Exception as e:

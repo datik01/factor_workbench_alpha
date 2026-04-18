@@ -124,7 +124,7 @@ def run_agentic_workflow(
     constituent_timeline: dict = None,
     benchmark_ticker: str = "IWM",
     quantiles: int = 5,
-    enable_calendar: bool = True,
+    enable_agents: bool = True,
 ) -> dict:
     """
     Executes the three-agent pipeline with cross-sectional portfolio construction.
@@ -135,16 +135,21 @@ def run_agentic_workflow(
     # AGENT 1: Hypothesis Generator
     # ─────────────────────────────────────────────────────────
     formatted_themes = ", ".join(themes)
-    hypothesis = ollama_chat(
-        system_prompt=HYPOTHESIS_PROMPT,
-        user_message=(
-            f"Generate a hypothesis for the composite '{formatted_themes}' factor strategy. "
-            f"The backtest spans {start_year} to {end_year} and rebalances at frequency '{rebalance_freq}'. "
-            f"Directional inversion is {'ON (Contrarian tilt)' if invert_factor else 'OFF (Standard tilt)'}. "
-            f"The strategy ranks the entire Russell 2000 universe and targets a '{strategy_type}' portfolio allocating a bound of {portfolio_size} ({portfolio_sizing_type})."
-        ),
-    )
-    logs.append({"agent": "Hypothesis Generator", "message": hypothesis})
+    
+    hypothesis = ""
+    if enable_agents:
+        hypothesis = ollama_chat(
+            system_prompt=HYPOTHESIS_PROMPT,
+            user_message=(
+                f"Generate a hypothesis for the composite '{formatted_themes}' factor strategy. "
+                f"The backtest spans {start_year} to {end_year} and rebalances at frequency '{rebalance_freq}'. "
+                f"Directional inversion is {'ON (Contrarian tilt)' if invert_factor else 'OFF (Standard tilt)'}. "
+                f"The strategy ranks the entire Russell 2000 universe and targets a '{strategy_type}' portfolio allocating a bound of {portfolio_size} ({portfolio_sizing_type})."
+            ),
+        )
+        logs.append({"agent": "Hypothesis Generator", "message": hypothesis})
+    else:
+        logs.append({"agent": "System (Bypassed)", "message": f"LLM inference disabled. Target themes: {formatted_themes}"})
 
     # ─────────────────────────────────────────────────────────
     # AGENT 2: Quant Analyst (Tool Execution + LLM Summary)
@@ -179,34 +184,36 @@ def run_agentic_workflow(
         metrics = tool_data.get("metrics", {})
 
         # Step 2b: LLM summarizes backtest results
-        metrics_text = "\n".join([f"- {k}: {v}" for k, v in metrics.items()])
-        quant_summary = ollama_chat(
-            system_prompt=QUANT_SUMMARY_PROMPT,
-            user_message=(
-                f"Hypothesis: {hypothesis}\n\n"
-                f"Cross-sectional backtest results for '{formatted_themes}' factor composite "
-                f"on {metrics.get('n_tickers', '?')} stocks over "
-                f"{metrics.get('n_trading_days', '?')} trading days:\n"
-                f"{metrics_text}"
-            ),
-        )
-        logs.append({"agent": "Quant Analyst", "message": quant_summary})
+        if enable_agents:
+            metrics_text = "\n".join([f"- {k}: {v}" for k, v in metrics.items()])
+            quant_summary = ollama_chat(
+                system_prompt=QUANT_SUMMARY_PROMPT,
+                user_message=(
+                    f"Hypothesis: {hypothesis}\n\n"
+                    f"Cross-sectional backtest results for '{formatted_themes}' factor composite "
+                    f"on {metrics.get('n_tickers', '?')} stocks over "
+                    f"{metrics.get('n_trading_days', '?')} trading days:\n"
+                    f"{metrics_text}"
+                ),
+            )
+            logs.append({"agent": "Quant Analyst", "message": quant_summary})
+            
+            # ─────────────────────────────────────────────────────────
+            # AGENT 3: Risk Manager
+            # ─────────────────────────────────────────────────────────
+            risk_review = ollama_chat(
+                system_prompt=RISK_MANAGER_PROMPT,
+                user_message=(
+                    f"Quant Summary: {quant_summary}\n\n"
+                    f"Raw Metrics:\n{json.dumps(metrics, indent=2)}"
+                ),
+            )
+            logs.append({"agent": "Risk Manager", "message": risk_review})
+
     else:
         error_msg = f"Backtest failed: {tool_data.get('error', 'Unknown error')}"
         logs.append({"agent": "Quant Analyst", "message": error_msg})
         return {"logs": logs, "plots": plots_json, "metrics": metrics, "error": error_msg}
-
-    # ─────────────────────────────────────────────────────────
-    # AGENT 3: Risk Manager
-    # ─────────────────────────────────────────────────────────
-    risk_review = ollama_chat(
-        system_prompt=RISK_MANAGER_PROMPT,
-        user_message=(
-            f"Quant Summary: {quant_summary}\n\n"
-            f"Raw Metrics:\n{json.dumps(metrics, indent=2)}"
-        ),
-    )
-    logs.append({"agent": "Risk Manager", "message": risk_review})
 
     return {
         "logs": logs,
