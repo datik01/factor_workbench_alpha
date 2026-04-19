@@ -14,13 +14,7 @@ Output: A time-indexed DataFrame of R2K constituents with tickers,
 import os
 import pandas as pd
 from datetime import datetime
-def _load_env_file(path):
-    if os.path.exists(path):
-        with open(path, "r") as f:
-            for line in f:
-                if "=" in line and not line.startswith("#"):
-                    k, v = line.strip().split("=", 1)
-                    os.environ[k] = v
+from dotenv import load_dotenv
 
 from .edgar_scraper import discover_etf_filings, extract_etf_holdings
 from .cusip_mapper import map_cusips_to_tickers
@@ -32,8 +26,8 @@ from .cusip_mapper import map_cusips_to_tickers
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 _project_dir = os.path.dirname(_script_dir)
 
-_load_env_file(os.path.join(_project_dir, ".env"))
-_load_env_file(os.path.join(_project_dir, "..", "..", ".env"))
+load_dotenv(os.path.join(_project_dir, ".env"))
+load_dotenv(os.path.join(_project_dir, "..", "..", ".env"))
 
 MASSIVE_API_KEY = os.getenv("MASSIVE_API_KEY")
 CACHE_DIR = os.path.join(_project_dir, ".cache", "constituents")
@@ -42,7 +36,28 @@ os.makedirs(CACHE_DIR, exist_ok=True)
 # Known IWM filing accessions (pre-discovered by scanning 8,177 iShares Trust filings)
 # Format: (reporting_date, accession_number, approx_holdings)
 # 20 quarters: Q1 2021 → Q4 2025 (5 full years)
-# Deprecated KNOWN_IWM_FILINGS array - Engine now relies entirely on dynamic organic scraping.
+KNOWN_IWM_FILINGS = [
+    ("2025-12-31", "0002071691-26-004226"),   # 1964 holdings
+    ("2025-09-30", "0002071691-25-007652"),   # 1981 holdings
+    ("2025-06-30", "0001752724-25-210405"),   # 2125 holdings
+    ("2025-03-31", "0001752724-25-119784"),   # 1960 holdings
+    ("2024-12-31", "0001752724-25-043851"),   # 1975 holdings
+    ("2024-09-30", "0001752724-24-269957"),   # 1986 holdings
+    ("2024-06-30", "0001752724-24-194120"),   # 1931 holdings
+    ("2024-03-31", "0001752724-24-123298"),   # 1956 holdings
+    ("2023-12-31", "0001752724-24-043096"),   # 1976 holdings
+    ("2023-09-30", "0001752724-23-264256"),   # 1996 holdings
+    ("2023-06-30", "0001752724-23-191317"),   # 2019 holdings
+    ("2023-03-31", "0001752724-23-123227"),   # 1930 holdings
+    ("2022-12-31", "0001752724-23-039260"),   # 1958 holdings
+    ("2022-09-30", "0001752724-22-268676"),   # 1977 holdings
+    ("2022-06-30", "0001752724-22-193728"),   # 1999 holdings
+    ("2022-03-31", "0001752724-22-122853"),   # 2024 holdings
+    ("2021-12-31", "0001752724-22-046410"),   # 2040 holdings
+    ("2021-09-30", "0001752724-21-255836"),   # 2038 holdings
+    ("2021-06-30", "0001752724-21-186233"),   # 2003 holdings
+    ("2021-03-31", "0001752724-21-116355"),   # 2063 holdings
+]
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -120,10 +135,16 @@ def build_historical_constituents(
     if not MASSIVE_API_KEY:
         raise ValueError("MASSIVE_API_KEY not found in .env")
 
-    # Step 1: Dynamically Discover filing accessions securely pulling all EDGAR formats
-    if progress_callback:
-        progress_callback(0, max_filings, f"Dynamically scraping {max_filings} historic filings for {etf_key} on EDGAR...")
-    filings = discover_etf_filings(etf_key=etf_key, max_filings=max_filings, progress_callback=progress_callback)
+    # Step 1: Get filing accessions
+    if use_known and etf_key == "R2K":
+        filings = [{"accession": acc, "reporting_date": rd} for rd, acc in KNOWN_IWM_FILINGS[:max_filings]]
+        if progress_callback:
+            progress_callback(0, len(filings), f"Using {len(filings)} known IWM filings...")
+    else:
+        if progress_callback:
+            progress_callback(0, 0, f"Discovering {etf_key} filings on SEC EDGAR (may take a few minutes)...")
+        discovered = discover_etf_filings(etf_key=etf_key, max_filings=max_filings, progress_callback=progress_callback)
+        filings = discovered
 
     if not filings:
         raise RuntimeError(f"No {etf_key} N-PORT filings found")
@@ -167,19 +188,7 @@ def build_historical_constituents(
 
         if not mapped_df.empty:
             mapped_df.to_parquet(period_cache, index=False)
-    # Finally, guarantee all historical local *.parquet shards for this ticker are appended 
-    # (So skipped modern bounds don't get deleted)
-    import glob
-    for cached_shard in glob.glob(os.path.join(CACHE_DIR, f"{etf_key.lower()}_*.parquet")):
-        if "historical_constituents" not in cached_shard:
-            try:
-                shard_df = pd.read_parquet(cached_shard)
-                if not shard_df.empty:
-                    # Deduplicate in case a period was fetched organically again
-                    if not any(pd.DataFrame.equals(shard_df, p) for p in all_periods):
-                        all_periods.append(shard_df)
-            except Exception:
-                pass
+            all_periods.append(mapped_df)
 
     if not all_periods:
         raise RuntimeError("No holdings data after CUSIP mapping")

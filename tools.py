@@ -22,6 +22,7 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
+import requests
 from scratch_calendar import generate_pnl_calendar_html
 
 # ═══════════════════════════════════════════════════════════════
@@ -75,7 +76,89 @@ def _fetch_single_ticker(ticker: str, start_date: str, end_date: str) -> pd.Data
                 "trades": bar.get("n"),
             })
         df = pd.DataFrame(records)
+        df = pd.DataFrame(records)
         df["date"] = pd.to_datetime(df["date"])
+        
+        # --- PIT FUNDAMENTAL HYBRIDIZATION ---
+        try:
+            fin_url = f"https://api.polygon.io/vX/reference/financials?ticker={ticker.upper()}&timeframe=quarterly&limit=100&sort=filing_date&apiKey={API_KEY}"
+            f_resp = requests.get(fin_url, timeout=12)
+            if f_resp.status_code == 200:
+                f_data = f_resp.json().get("results", [])
+                
+                f_records = []
+                for rep in f_data:
+                    f_date = rep.get("filing_date")
+                    if not f_date: continue
+                    fin = rep.get("financials", {})
+                    inc = fin.get("income_statement", {})
+                    bal = fin.get("balance_sheet", {})
+                    cf = fin.get("cash_flow_statement", {})
+
+                    record = {"date": f_date}
+                    fields_to_extract = {
+                        "eps": (inc, "basic_earnings_per_share"),
+                        "revenues": (inc, "revenues"),
+                        "gross_profit": (inc, "gross_profit"),
+                        "cost_of_revenue": (inc, "cost_of_revenue"),
+                        "operating_income": (inc, "operating_income_loss"),
+                        "net_income": (inc, "net_income_loss"),
+                        "interest_expense": (inc, "interest_expense_operating"),
+                        "research_and_development": (inc, "research_and_development"),
+                        "shares": (inc, "weighted_average_number_of_shares_outstanding_basic"),
+                        
+                        "equity": (bal, "equity"),
+                        "assets": (bal, "assets"),
+                        "liabilities": (bal, "liabilities"),
+                        "current_assets": (bal, "current_assets"),
+                        "current_liabilities": (bal, "current_liabilities"),
+                        "inventory": (bal, "inventory"),
+                        
+                        "net_cash_flow": (cf, "net_cash_flow"),
+                        "operating_cash_flow": (cf, "net_cash_flow_from_operating_activities"),
+                        "dividends_paid": (cf, "net_cash_flow_from_financing_activities_dividend_payments"),
+                    }
+                    
+                    for key, (statement, poly_key) in fields_to_extract.items():
+                        record[key] = statement.get(poly_key, {}).get("value", np.nan)
+                        
+                    # Structural fallback for shares outstanding missing from Income Statement using Balance Sheet
+                    if pd.isna(record.get("shares")):
+                        record["shares"] = bal.get("common_stock_shares_outstanding", {}).get("value", np.nan)
+                        
+                    f_records.append(record)
+                if f_records:
+                    f_df = pd.DataFrame(f_records)
+                    f_df["date"] = pd.to_datetime(f_df["date"])
+                    f_df = f_df.sort_values("date").drop_duplicates("date")
+                    
+                    # Asof merge accurately simulating forward-fill timeline natively without future bias
+                    df = pd.merge_asof(df.sort_values("date"), f_df, on="date", direction="backward")
+                    
+                    # Fill explicit nans for math boundaries securely
+                    df.ffill(inplace=True)
+                    df.fillna(0, inplace=True)
+                    
+                    # Build Composite Factors
+                    df["market_cap"] = df["shares"] * df["close"]
+                    df["pe_ratio"] = np.where((df["eps"] > 0) & (df["close"] > 0), df["close"] / df["eps"], 0.0)
+                    df["pb_ratio"] = np.where((df["equity"] > 0) & (df["close"] > 0), df["close"] / (df["equity"] / 1e6), 0.0) # Scaling proxy
+                    df["ps_ratio"] = np.where((df["revenues"] > 0) & (df["close"] > 0), df["close"] / (df["revenues"] / 1e6), 0.0)
+                    
+        except Exception:
+            pass
+            
+        # Ensure default fundamental columns exist if fetch purely failed
+        expected_cols = [
+            "pe_ratio", "pb_ratio", "ps_ratio", "eps", "revenues", "gross_profit", "cost_of_revenue",
+            "operating_income", "net_income", "interest_expense", "research_and_development", "shares", "market_cap",
+            "equity", "assets", "liabilities", "current_assets", 
+            "current_liabilities", "inventory", "net_cash_flow", "operating_cash_flow", "dividends_paid"
+        ]
+        for col in expected_cols:
+            if col not in df.columns:
+                df[col] = 0.0
+
         return df
     except Exception:
         return pd.DataFrame()
@@ -115,21 +198,57 @@ def fetch_universe_data(
     pd.DataFrame
         Panel data indexed by date with ticker column
     """
-    cache_file = _cache_path(len(tickers), start_year, end_year)
+    cache_file_target = _cache_path(len(tickers), start_year, end_year)
 
-    # Check cache first
-    if not force_refresh and os.path.exists(cache_file):
-        if progress_callback:
-            progress_callback(0, 0, "", "Loading from cache...")
-        df = pd.read_parquet(cache_file)
-        cached_n = df["ticker"].nunique()
-        if cached_n >= len(tickers) * 0.85:
+    # Check cache first (Decoupled from explicit Date bound to allow cross-day persistence of structural data)
+    if not force_refresh:
+        import glob
+        import re
+        
+        all_caches = glob.glob(os.path.join(CACHE_DIR, "universe_*.parquet"))
+        valid_caches = []
+        
+        # Scan filesystem for ANY cache file encapsulating the requested temporal vectors!
+        for cache_candidate in all_caches:
+            basename = os.path.basename(cache_candidate)
+            match = re.search(r'universe_\d+_(\d{4})_(\d{4})_', basename)
+            if match:
+                c_start, c_end = int(match.group(1)), int(match.group(2))
+                # Valid iff the cached timeline formally traps our execution bounds
+                if c_start <= start_year and c_end >= end_year:
+                    valid_caches.append(cache_candidate)
+                    
+        if valid_caches:
+            # Check the largest valid cache files first to maximize matrix intersection probability
+            latest_cache = sorted(valid_caches, key=os.path.getsize, reverse=True)[0]
             if progress_callback:
-                progress_callback(cached_n, cached_n, "", f"Loaded {cached_n} tickers from cache.")
-            return df
-        else:
-            if progress_callback:
-                progress_callback(0, 0, "", f"Cache size mismatch ({cached_n}/{len(tickers)}). Rebuilding cache...")
+                progress_callback(0, 0, "", "Loading from persistent cross-sectional cache...")
+            df = pd.read_parquet(latest_cache)
+            
+            # Physically intersect the massive cache dynamically against the target requested array
+            cached_tickers = set(df["ticker"].unique())
+            target_tickers = set(tickers)
+            intersect = cached_tickers.intersection(target_tickers)
+            
+            # Note: We enforce a 85% minimal hit-rate threshold to protect against localized data decay
+            if len(intersect) >= len(tickers) * 0.85 and "eps" in df.columns:
+                if "eps" not in df.columns or (df["pe_ratio"] == 0).all():
+                    pass # Trigger rebuild naturally
+                else:
+                    # Dynamically subset the master dataframe securely preventing massive GPU RAM consumption
+                    df = df[df["ticker"].isin(intersect)].copy()
+                    
+                    # Physically sever the bounds to only export the targeted Matrix slice mechanically padding -1 year for technical lag hooks!
+                    cutoff_start = f"{start_year - 1}-01-01"
+                    cutoff_end = f"{end_year}-12-31"
+                    df = df[(df["date"] >= cutoff_start) & (df["date"] <= cutoff_end)].copy()
+                    
+                    if progress_callback:
+                        progress_callback(len(intersect), len(intersect), "", f"Sub-mapped {len(intersect)} targets explicitly from Master Cache ({start_year}-{end_year}).")
+                    return df
+            else:
+                if progress_callback:
+                    progress_callback(0, 0, "", f"Cache intersection gap ({len(intersect)}/{len(tickers)}). Rebuilding specific cache...")
 
     if not API_KEY:
         raise ValueError("MASSIVE_API_KEY is not set in .env")
@@ -176,8 +295,8 @@ def fetch_universe_data(
     universe = pd.concat(all_frames, ignore_index=True)
     universe = universe.sort_values(["date", "ticker"]).reset_index(drop=True)
 
-    # Cache to parquet
-    universe.to_parquet(cache_file, index=False)
+    # Cache to parquet matching the generated exact wildcard bound structurally
+    universe.to_parquet(cache_file_target, index=False)
 
     if progress_callback:
         n = universe["ticker"].nunique()
@@ -277,14 +396,23 @@ def execute_gplearn_formula(df: pd.DataFrame, formula_str: str) -> np.ndarray:
         "delay_5": delay_5, "sma_10": sma_10, "sma_20": sma_20, 
         "ts_max_20": ts_max_20, "ts_min_20": ts_min_20,
         "vol_20": vol_20, "rsi_14": rsi_14, "macd_line": macd_line,
-        "Open": df["open"].values,
-        "High": df["high"].values,
-        "Low": df["low"].values,
-        "Close": df["close"].values,
-        "Volume": df["volume"].values,
+        "Open": df["open"].values, "open": df["open"].values,
+        "High": df["high"].values, "high": df["high"].values,
+        "Low": df["low"].values, "low": df["low"].values,
+        "Close": df["close"].values, "close": df["close"].values,
+        "Volume": df["volume"].values, "volume": df["volume"].values,
         "VWAP": df["vwap"].values if "vwap" in df.columns else df["close"].values,
+        "vwap": df["vwap"].values if "vwap" in df.columns else df["close"].values,
         "Trades": df["trades"].values if "trades" in df.columns else np.ones(len(df)),
-        "Returns": df["daily_return"].values if "daily_return" in df.columns else np.zeros(len(df))
+        "trades": df["trades"].values if "trades" in df.columns else np.ones(len(df)),
+        "Returns": df["daily_return"].values if "daily_return" in df.columns else np.zeros(len(df)),
+        "returns": df["daily_return"].values if "daily_return" in df.columns else np.zeros(len(df)),
+        "EPS": df["eps"].values if "eps" in df.columns else np.zeros(len(df)), "eps": df["eps"].values if "eps" in df.columns else np.zeros(len(df)),
+        "REVENUES": df["revenues"].values if "revenues" in df.columns else np.zeros(len(df)), "revenues": df["revenues"].values if "revenues" in df.columns else np.zeros(len(df)),
+        "EQUITY": df["equity"].values if "equity" in df.columns else np.zeros(len(df)), "equity": df["equity"].values if "equity" in df.columns else np.zeros(len(df)),
+        "PE_RATIO": df["pe_ratio"].values if "pe_ratio" in df.columns else np.zeros(len(df)), "pe_ratio": df["pe_ratio"].values if "pe_ratio" in df.columns else np.zeros(len(df)),
+        "PB_RATIO": df["pb_ratio"].values if "pb_ratio" in df.columns else np.zeros(len(df)), "pb_ratio": df["pb_ratio"].values if "pb_ratio" in df.columns else np.zeros(len(df)),
+        "PS_RATIO": df["ps_ratio"].values if "ps_ratio" in df.columns else np.zeros(len(df)), "ps_ratio": df["ps_ratio"].values if "ps_ratio" in df.columns else np.zeros(len(df))
     }
     
     # Secure string replacement for protected python keywords
@@ -443,6 +571,7 @@ def run_cross_sectional_backtest(
     benchmark_ticker: str = "IWM",
     quantiles: int = 5,
     enable_calendar: bool = True,
+    vol_target: float = 0.0,
 ) -> str:
     """
     Full cross-sectional factor backtest:
@@ -471,6 +600,11 @@ def run_cross_sectional_backtest(
             progress_callback(0, 100, "", "Computing multi-factor composite scores...")
 
         scored = _compute_factor_scores(universe, themes, custom_formula=custom_formula, progress_callback=progress_callback)
+        
+        # Mathematically strip invalid algorithmic states (Inf/NaN) generated by unconstrained symbolic nodes before sorting!
+        scored["factor_score"] = scored["factor_score"].replace([np.inf, -np.inf], np.nan)
+        # We explicitly drop rows with missing Returns because we cannot physically trade them (but NOT factor_score because the asset might be actively held from a prior rebalance!)
+        scored = scored.dropna(subset=["fwd_return"]).copy()
         
         if invert_factor:
             scored["factor_score"] *= -1
@@ -504,7 +638,10 @@ def run_cross_sectional_backtest(
             progress_callback(0, 100, "", "Executing vectorized backtest constraints...")
 
         # ── Portfolio construction ───────────────────────────
-        leg_size = max(1, portfolio_size_bound // 2)
+        if strategy_type == "Long/Short":
+            leg_size = max(1, portfolio_size_bound // 2)
+        else:
+            leg_size = max(1, portfolio_size_bound) # Don't divide the portfolio size if strictly Long-Only or Short-Only
 
         # Add microscopic deterministic jitter to break exact index ordering mapping identical overlaps
         np.random.seed(42)
@@ -521,10 +658,13 @@ def run_cross_sectional_backtest(
         scored["short_rank"] = group_sizes - scored["long_rank"] + 1
 
         scored["position"] = 0.0
+        # Aggressively mask out invalid scores so they don't accidentally get ranked into the Short leg natively
+        valid_mask = ~scored["factor_score"].isna()
+        
         if strategy_type in ["Long/Short", "Long Only"]:
-            scored.loc[scored["long_rank"] <= leg_size, "position"] = 1.0
+            scored.loc[(scored["long_rank"] <= leg_size) & valid_mask, "position"] = 1.0
         if strategy_type in ["Long/Short", "Short Only"]:
-            scored.loc[scored["short_rank"] <= leg_size, "position"] = -1.0
+            scored.loc[(scored["short_rank"] <= leg_size) & valid_mask, "position"] = -1.0
             
         # VERY IMPORTANT: Return matrix back to chronological Ticker sequential structures for valid temporal FFills below!
         scored = scored.sort_values(["ticker", "date"])
@@ -555,6 +695,15 @@ def run_cross_sectional_backtest(
         portfolio = scored[scored["position"] != 0].copy()
         portfolio["port_contrib"] = portfolio["position"] * portfolio["fwd_return"]
         daily_port_ret = portfolio.groupby("date")["port_contrib"].mean().sort_index()
+        
+        # Volatility Targeting (Dynamic Risk Parity Leverage)
+        if vol_target > 0.0:
+            est_vol = daily_port_ret.rolling(window=100, min_periods=20).std() * np.sqrt(252)
+            est_vol = est_vol.replace(0, np.nan).fillna(vol_target) 
+            k_leverage = vol_target / est_vol
+            k_leverage = k_leverage.clip(upper=3.0) 
+            daily_port_ret = daily_port_ret * k_leverage
+            
         daily_port_ret.name = "port_return"
 
         # Benchmark: Actual ETF limits
@@ -572,10 +721,15 @@ def run_cross_sectional_backtest(
 
         # Long-only leg (Extracted from the pre-filtered active portfolio slice instead of 2.5M rows)
         long_only = portfolio[portfolio["position"] == 1.0].groupby("date")["fwd_return"].mean()
-        long_only.name = "long_return"
 
         # Short-only leg
         short_only = portfolio[portfolio["position"] == -1.0].groupby("date")["fwd_return"].mean()
+        
+        if vol_target > 0.0:
+            long_only = long_only * k_leverage
+            short_only = short_only * k_leverage
+
+        long_only.name = "long_return"
         short_only.name = "short_return"
 
         combined = pd.DataFrame({
@@ -703,7 +857,7 @@ def run_cross_sectional_backtest(
 
         fig_equity.add_trace(go.Scatter(
             x=cum_port.index, y=cum_port.values,
-            mode="lines", name="L/S Factor Portfolio",
+            mode="lines", name=f"{strategy_type} Factor Portfolio",
             line=dict(color="#00d4aa", width=3),
         ))
         
@@ -817,11 +971,14 @@ def run_cross_sectional_backtest(
             template="plotly_dark", height=320,
             yaxis=dict(tickformat=".1%"),
         )
-        # Extract Live Triggers (Latest Date)
-        latest_date = scored["date"].max()
+        # Extract Live Triggers natively enforcing Cross-Sectional volume to prevent single-stock array trailing bounds
+        date_counts = scored.groupby("date").size()
+        robust_dates = date_counts[date_counts > 50].index
+        latest_date = robust_dates.max() if len(robust_dates) > 0 else scored["date"].max()
+        
         latest_cross_section = scored[scored["date"] == latest_date]
-        current_longs = latest_cross_section[latest_cross_section["position"] == 1.0]["ticker"].tolist()
-        current_shorts = latest_cross_section[latest_cross_section["position"] == -1.0]["ticker"].tolist()
+        current_longs = latest_cross_section[latest_cross_section["position"] > 0]["ticker"].tolist()
+        current_shorts = latest_cross_section[latest_cross_section["position"] < 0]["ticker"].tolist()
 
         strat_ret = daily_port_ret
         strat_ret.index = pd.to_datetime(strat_ret.index)
@@ -854,7 +1011,10 @@ def run_cross_sectional_backtest(
                     "longs": longs_str.get(str_key, []),
                     "shorts": shorts_str.get(str_key, [])
                 }
-            calendar_html_out = generate_pnl_calendar_html(strat_ret, daily_holdings)
+            
+            # Pass the precise algorithmic trade dates natively bypassing artificial API gaps masquerading as turnover!
+            true_trade_dates = [d.strftime('%Y-%m-%d') for d in active_turnover.index]
+            calendar_html_out = generate_pnl_calendar_html(strat_ret, daily_holdings, true_trade_dates)
 
         latest_date_str = latest_date.strftime("%Y-%m-%d") if hasattr(latest_date, 'strftime') else str(latest_date)[:10]
 

@@ -52,6 +52,28 @@ THEMES = {
     "Low Volatility": "volatility",
     "Abnormal Volume": "volume",
     "Size (Market Cap Proxy)": "size",
+    "PE Ratio (Fundamental)": "pe_ratio",
+    "PB Ratio (Fundamental)": "pb_ratio",
+    "PS Ratio (Fundamental)": "ps_ratio",
+    "EPS (Fundamental)": "eps",
+    "Revenues (Fundamental)": "revenues",
+    "Gross Profit (FS)": "gross_profit",
+    "Operating Income (FS)": "operating_income",
+    "Net Income (FS)": "net_income",
+    "R&D Spend (FS)": "research_and_development",
+    "Equity (FS)": "equity",
+    "Total Assets (FS)": "assets",
+    "Total Liabilities (FS)": "liabilities",
+    "Current Assets (FS)": "current_assets",
+    "Current Liabilities (FS)": "current_liabilities",
+    "Inventory (FS)": "inventory",
+    "Net Cash Flow (FS)": "net_cash_flow",
+    "Operating Cash Flow (FS)": "operating_cash_flow",
+    "Cost of Revenue (FS)": "cost_of_revenue",
+    "Interest Expense (FS)": "interest_expense",
+    "Dividends Paid (FS)": "dividends_paid",
+    "Market Cap (Derived)": "market_cap",
+    "Shares Outstanding (Derived)": "shares",
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -353,6 +375,7 @@ app_ui = ui.page_fluid(
                 ui.input_select("rebalance_freq", tip("Rebalance Frequency", "How often the algorithm recalculates ranks and shifts portfolio capital."), 
                                 choices={"D": "Daily", "W": "Weekly", "M": "Monthly", "Q": "Quarterly", "Y": "Yearly"}, 
                                 selected="M"),
+                ui.input_select("vol_target", tip("Volatility Targeting (Risk Parity)", "Dynamically scale margin leverage to hit a fixed annualized risk constraint (1.0x to 3.0x max)."), choices={"0": "Unleveraged (1.0x)", "0.10": "10% Target (Conservative)", "0.15": "15% Target", "0.20": "20% Target (Aggressive)", "0.25": "25% Target"}, selected="0"),
                 class_="config-section",
             ),
 
@@ -386,12 +409,38 @@ app_ui = ui.page_fluid(
                     ui.input_select("miner_universe", tip("Universe Target", "The asset pool the genetic engine uses to train its formulas."), ["R2K", "SP500", "NDX"], selected="SP500"),
                     ui.input_select("miner_horizon", tip("Optimization Horizon", "The forward-looking return window the AI attempts to predict."), choices={"1": "Daily (1-Day)", "5": "Weekly (5-Day)", "21": "Monthly (21-Day)", "63": "Quarterly (63-Day)", "252": "Yearly (252-Day)"}, selected="1"),
                     ui.input_select("miner_fitness", tip("Genetic Fitness Objective", "The mathematical risk or accuracy metric the AI maximizes during evolution."), choices={"ic": "Information Coefficient (Rank)", "mae": "Mean Absolute Error (Magnitude)", "sharpe": "Sharpe Ratio (Return/Risk)", "pnl_dd": "Calmar Ratio (PNL / Max Drawdown)"}, selected="ic"),
-                    ui.input_select("miner_funcs", tip("Theoretical Syntax Set", "Restricts the AI to only use specific mathematical functions."), choices={"all": "Unrestricted Matrix (All)", "linear": "Linear Arithmetic (+, -, *, /)", "cross_sectional": "Cross-Sectional Scoring (Rank)", "technical": "Time-Series Technicals (SMA, Delay)"}, selected="all"),
-                    ui.input_numeric("miner_generations", tip("Generational Evolution limits", "How many times the AI breeds, mutates, and culls the formulas."), value=3, min=1, max=10),
-                    ui.input_numeric("miner_pop", tip("Population Tree Map Size", "The number of formulas generated and tested per generation."), value=100, min=10, max=500),
+                        ui.div(
+                            ui.input_selectize(
+                                "miner_funcs", 
+                                tip("Theoretical Component Set", "Restricts the AI to only use specific mathematical functions and data structures."), 
+                                choices={
+                                    "Arithmetic Operations": {"grp_arithmetic": "All Arithmetic Operations", "add": "Addition (+)", "sub": "Subtraction (-)", "mul": "Multiplication (*)", "div": "Division (/)", "abs": "Absolute Value", "log": "Logarithm", "sqrt": "Square Root"},
+                                    "Time-Series Technicals": {"grp_technicals": "All Time-Series Technicals", "delay_5": "5-Day Lag/Delay", "sma_10": "10-Day SMA", "sma_20": "20-Day SMA", "ts_max_20": "20-Day Max", "ts_min_20": "20-Day Min", "rsi_14": "14-Day RSI", "macd_line": "MACD", "vol_20": "20-Day Volatility"},
+                                    "Cross-Sectional Scoring": {"grp_cross_sectional": "All Cross-Sectional Scoring", "cs_rank_func": "Cross-Sectional Rank"},
+                                    "Pricing & Volume": {"grp_pricing": "All Pricing & Volume", "open": "Open", "high": "High", "low": "Low", "close": "Close", "volume": "Volume", "vwap": "VWAP", "trades": "Trades"},
+                                    "Fundamental Valuation": {"grp_valuation": "All Fundamental Valuation", "pe_ratio": "PE Ratio", "pb_ratio": "PB Ratio", "ps_ratio": "PS Ratio", "market_cap": "Market Cap"},
+                                    "Income Statement": {"grp_income": "All Income Statement", "eps": "EPS", "revenues": "Revenues", "gross_profit": "Gross Profit", "cost_of_revenue": "Cost of Revenue", "operating_income": "Operating Income", "net_income": "Net Income", "interest_expense": "Interest Expense", "research_and_development": "R&D Spend", "shares": "Shares Out"},
+                                    "Balance Sheet": {"grp_balance": "All Balance Sheet", "equity": "Total Equity", "assets": "Total Assets", "liabilities": "Total Liabilities", "current_assets": "Current Assets", "current_liabilities": "Current Liab", "inventory": "Inventory"},
+                                    "Cash Flow Statement": {"grp_cash": "All Cash Flow Statement", "net_cash_flow": "Net Cash Flow", "operating_cash_flow": "Operating Cash Flow", "dividends_paid": "Dividends Paid"}
+                                },
+                                selected=["add", "sub", "mul", "div", "close", "pe_ratio", "market_cap"], 
+                                multiple=True
+                            ),
+                            ui.div(
+                                ui.input_action_button("btn_select_all_funcs", "Select All", class_="btn-primary btn-sm"),
+                                ui.input_action_button("btn_clear_all_funcs", "Clear All", class_="btn-outline-danger btn-sm"),
+                                class_="d-flex gap-2 mt-2 align-items-center"
+                            )
+                        ),
+                    ui.input_select("miner_strategy_type", tip("Strategy Directionality", "Strictly isolate Alpha execution boundaries to purely Long or Short vectors."), choices={"ls": "Symmetrical Long/Short", "long": "Long Only", "short": "Short Only"}, selected="ls"),
+                    ui.input_select("miner_quantile", tip("Evaluation Tail Sizing (Quantiles)", "Zero out ALL middle-range distribution structures dynamically and calculate PNL purely on the 10/20% tails!"), choices={"0": "Global Weighting", "5": "Quintiles (Top/Bottom 20%)", "10": "Deciles (10%)", "20": "Vigintiles (5%)"}, selected="10"),
+                    ui.input_numeric("miner_generations", tip("Generational Evolution", "How many times the AI breeds, mutates, and culls the formulas."), value=3, min=1, max=50),
+                    ui.input_numeric("miner_pop", tip("Population Map Size", "The number of formulas generated and tested per generation."), value=100, min=10, max=10000),
                     ui.input_switch("miner_monotonicity", tip("Enforce Monotonic Quantiles", "Strictly kills factors where Q1->Q5 returns are not linearly scaling (e.g. U-shaped curves)."), value=True),
-                    col_widths={"sm": (4, 4, 4, 4, 4, 4, 12)},
-                    class_="mb-4",
+                    ui.input_slider("miner_year_range", tip("Timeline Horizon", "Historical window to fetch metrics over."), min=2006, max=2026, value=[2018, 2026], sep=""),
+                    ui.input_slider("miner_oos", tip("Out-Of-Sample (OOS) %", "Reserve the newest N% of timeline purely for Validation testing to prevent extreme curve fitting biases."), min=0, max=50, value=20, step=5),
+                    col_widths={"sm": (4, 4, 4, 4, 4, 4, 4, 4, 4, 12)},
+                    class_="mb-5",
                     fill=False,
                     fillable=False
                 ),
@@ -439,23 +488,163 @@ def server(input, output, session):
                 class_="p-4 text-center mt-5"
             )
             
-        return ui.input_action_button("btn_run_miner", "Launch Factor Miner (Genetic Search)", class_="btn-run w-100 mb-4")
+        elements = [ui.input_action_button("btn_run_miner", "Launch Factor Miner (Genetic Search)", class_="btn-run w-100 mb-4")]
+        
+        if miner_results_val.get() is None:
+            elements.append(
+                ui.div(
+                    ui.h5("🔬 Understanding Biological Signal Discovery", style="color: #00d4aa; margin-bottom: 15px;"),
+                    ui.p(
+                        "The Alpha Miner is an institutional-grade Genetic Programming (GP) Engine. It natively extracts " ,
+                        ui.span("pure directional predictive correlation", style="color: #4dabf7; font-weight: bold;"),
+                        " from millions of generated mathematical trees across 20 years of SEC data.",
+                        style="color: #c7c7c7;"
+                    ),
+                    ui.p(
+                        "Unlike the True Portfolio Backtester—which physically forces fixed capital through strict mark-to-market geometric portfolio constraints—the GP engine evaluates ",
+                        ui.span("raw mathematical fitness", style="font-style: italic;"),
+                        " by rapidly stacking pseudo-arithmetic arrays. This prevents the execution friction from trapping the biological engine in local minimums, allowing it to natively evaluate 10,000+ formulas in seconds!",
+                        style="color: #c7c7c7;"
+                    ),
+                    ui.p(
+                        "Configure your array constraints and press Launch to initialize convergence.",
+                        style="color: #797979; font-style: italic; margin-top: 15px;"
+                    ),
+                    class_="p-4 rounded text-start",
+                    style="background-color: #1a1e23; border: 1px solid #2d333b; border-left: 4px solid #00d4aa;"
+                )
+            )
+            
+        return ui.div(*elements)
+
+    def make_sparkline_svg(data, oos_percent=20, color="#00d4aa", oos_color="#4dabf7"):
+        if not data or len(data) < 2: return ""
+        min_v, max_v = min(data), max(data)
+        rng = max_v - min_v if max_v != min_v else 1
+        
+        split_idx = int(len(data) * (1 - oos_percent / 100))
+        if oos_percent <= 0: split_idx = len(data)
+        
+        pts_is = []
+        pts_oos = []
+        width, height = 200, 50
+        
+        for i, v in enumerate(data):
+            x = (i / (len(data)-1)) * width
+            y = height - ((v - min_v) / rng) * height
+            coord = f"{x},{y}"
+            if i <= split_idx:
+                pts_is.append(coord)
+            if i >= split_idx:
+                pts_oos.append(coord)
+                
+        str_is = " ".join(pts_is)
+        str_oos = " ".join(pts_oos)
+        
+        return f'''
+        <svg width="{width}" height="{height}" style="background:rgba(0,0,0,0.15); border: 1px solid rgba(0,212,170,0.2); border-radius: 6px; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.borderColor='#00d4aa'; this.style.boxShadow='0 0 8px rgba(0,212,170,0.4)';" onmouseout="this.style.borderColor='rgba(0,212,170,0.2)'; this.style.boxShadow='none';">
+            <defs>
+                <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="1.5" result="blur" />
+                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                </filter>
+            </defs>
+            <polyline points="{str_is}" fill="none" stroke="{color}" stroke-width="2" vector-effect="non-scaling-stroke" />
+            <polyline points="{str_oos}" fill="none" stroke="{oos_color}" stroke-width="2.5" vector-effect="non-scaling-stroke" filter="url(#glow)" />
+        </svg>
+        '''
 
     @render.ui
     def miner_results_ui():
-        results = miner_results_val.get()
-        if results:
-            cards = [ui.hr(), ui.h4("🏆 Top Discovered Alpha Formulas", class_="mt-3 mb-3", style="color: white;")]
-            for i, r in enumerate(results):
-                cards.append(
-                    ui.div(
-                        ui.h5(f"Rank {i+1} | Evolution Metric Score: {r['fitness_score']:.4f}", style="font-weight: 700; font-size: 0.85rem; color: #00d4aa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;"),
-                        ui.tags.code(r['formula'], style="font-size: 1.15rem; color: #e5e5e5; font-weight: 500;"),
-                        style="padding: 18px 20px; border-radius: 14px; border: 1px solid var(--border); margin-bottom: 14px; background: rgba(0, 212, 170, 0.08); border-left: 4px solid var(--accent-teal);"
+        results_payload = miner_results_val.get()
+        if results_payload and isinstance(results_payload, dict):
+            
+            def build_cards(res_list, prefix):
+                cards = []
+                for i, r in enumerate(res_list):
+                    oos_badge = ""
+                    if 'oos_score' in r:
+                        oos_badge = f" | OOS VALIDATION: {r['oos_score']:.4f}"
+                    
+                    spark_html = ""
+                    m_oos = input.miner_oos()
+                    m_oos_val = int(m_oos) if m_oos else 20
+                    if 'eq_curve' in r and len(r['eq_curve']) > 0:
+                        svg_str = make_sparkline_svg(r['eq_curve'], oos_percent=m_oos_val)
+                        spark_html = f'''<div style="cursor:pointer; margin-left: 15px;" onclick="Shiny.setInputValue('sparkline_clicked', '{prefix}_{i}', {{priority: 'event'}})" title="Click to View Plotly HD Curve">
+                            {svg_str}
+                        </div>'''
+                    
+                    cards.append(
+                        ui.div(
+                            ui.div(
+                                ui.h5(f"Rank {i+1} | IS SCORE: {r.get('fitness_score', 0):.4f}{oos_badge}", style="font-weight: 700; font-size: 0.85rem; color: #00d4aa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;"),
+                                ui.tags.code(r.get('formula', ''), style="font-size: 1.15rem; color: #e5e5e5; font-weight: 500;"),
+                                style="flex: 1;"
+                            ),
+                            ui.HTML(spark_html),
+                            style="display: flex; justify-content: space-between; align-items: center; padding: 18px 20px; border-radius: 14px; border: 1px solid var(--border); margin-bottom: 14px; background: rgba(0, 212, 170, 0.08); border-left: 4px solid var(--accent-teal);"
+                        )
                     )
+                return ui.div(*cards)
+            
+            return ui.div(
+                ui.hr(), 
+                ui.h4("🏆 Top Discovered Alpha Formulas", class_="mt-3 mb-3", style="color: white;"),
+                ui.navset_card_tab(
+                    ui.nav_panel("Top 10 In-Sample", build_cards(results_payload.get("top_is", []), "is")),
+                    ui.nav_panel("Top 10 Out-Of-Sample", build_cards(results_payload.get("top_oos", []), "oos")),
+                    ui.nav_panel("Top 10 Robust Combined", build_cards(results_payload.get("top_combined", []), "combined"))
                 )
-            return ui.div(*cards)
+            )
         return ui.div()
+
+    @reactive.Effect
+    @reactive.event(input.btn_select_all_funcs)
+    def _select_all_funcs():
+        all_opts = [
+            "grp_arithmetic", "grp_technicals", "grp_cross_sectional", 
+            "grp_pricing", "grp_valuation", "grp_income", 
+            "grp_balance", "grp_cash"
+        ]
+        ui.update_selectize("miner_funcs", selected=all_opts)
+
+    @reactive.Effect
+    @reactive.event(input.btn_clear_all_funcs)
+    def _clear_all_funcs():
+        ui.update_selectize("miner_funcs", selected=[])
+
+    @reactive.Effect
+    @reactive.event(input.miner_funcs)
+    def _sanitize_funcs():
+        current = list(input.miner_funcs()) if input.miner_funcs() else []
+        if not current: return
+        
+        group_map = {
+            "grp_arithmetic": ["add", "sub", "mul", "div", "abs", "log", "sqrt"],
+            "grp_technicals": ["delay_5", "sma_10", "sma_20", "ts_max_20", "ts_min_20", "rsi_14", "macd_line", "vol_20"],
+            "grp_cross_sectional": ["cs_rank_func"],
+            "grp_pricing": ["open", "high", "low", "close", "volume", "vwap", "trades"],
+            "grp_valuation": ["pe_ratio", "pb_ratio", "ps_ratio", "market_cap"],
+            "grp_income": ["eps", "revenues", "gross_profit", "cost_of_revenue", "operating_income", "net_income", "interest_expense", "research_and_development", "shares"],
+            "grp_balance": ["equity", "assets", "liabilities", "current_assets", "current_liabilities", "inventory"],
+            "grp_cash": ["net_cash_flow", "operating_cash_flow", "dividends_paid"]
+        }
+        
+        purged = False
+        new_sel = current.copy()
+        
+        for master, children in group_map.items():
+            if master in new_sel:
+                for child in children:
+                    if child in new_sel:
+                        new_sel.remove(child)
+                        purged = True
+                        
+        if purged:
+            ui.update_selectize("miner_funcs", selected=new_sel)
+
+
 
     @reactive.Effect
     def _poll_miner_thread():
@@ -470,6 +659,62 @@ def server(input, output, session):
             else:
                 miner_results_val.set(miner_progress_state["res"])
                 miner_status_val.set("Complete.")
+
+    @reactive.Effect
+    @reactive.event(input.sparkline_clicked)
+    def handle_sparkline_click():
+        clk_id = input.sparkline_clicked()
+        if not clk_id or "_" not in str(clk_id): return
+        
+        tab_prefix, str_idx = clk_id.split("_")
+        idx = int(str_idx)
+        
+        results_payload = miner_results_val.get()
+        if not results_payload or not isinstance(results_payload, dict): return
+        
+        results = results_payload.get(f"top_{tab_prefix}")
+        
+        if results and 0 <= idx < len(results):
+            r = results[idx]
+            eq_curve = r.get("eq_curve", [])
+            if not eq_curve: return
+            
+            m_oos = input.miner_oos()
+            m_oos_val = int(m_oos) if m_oos else 20
+            split_idx = int(len(eq_curve) * (1 - m_oos_val / 100))
+            if m_oos_val <= 0: split_idx = len(eq_curve)
+            
+            is_y = eq_curve[:split_idx]
+            is_x = list(range(split_idx))
+            
+            oos_y = eq_curve[split_idx-1:]
+            oos_x = list(range(split_idx-1, len(eq_curve)))
+            
+            import plotly.graph_objects as go
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=is_x, y=is_y, mode='lines', name='In-Sample Bound', line=dict(color='#00d4aa', width=2), fill='tozeroy', fillcolor='rgba(0, 212, 170, 0.1)'))
+            
+            if m_oos_val > 0 and len(oos_y) > 0:
+                fig.add_trace(go.Scatter(x=oos_x, y=oos_y, mode='lines', name='OOS Validation Bounds', line=dict(color='#4dabf7', width=3), fill='tozeroy', fillcolor='rgba(77, 171, 247, 0.25)'))
+                
+            fig.update_layout(
+                title=f"<span style='color:white; font-size: 20px;'>Factor {idx+1} Generational Equity Projection</span><br><span style='font-size:14px; color:#888;'>Ast Vector: {r['formula']}</span>",
+                template="plotly_dark",
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                hovermode="x unified",
+                margin=dict(l=40, r=40, t=80, b=40),
+                height=450
+            )
+            html_str = fig.to_html(full_html=False, include_plotlyjs='cdn')
+            
+            ui.modal_show(ui.modal(
+                ui.HTML(html_str),
+                title=f"Factor PNL Distribution Preview (Rank {idx+1})",
+                size="xl",
+                easy_close=True,
+                footer=ui.modal_button("Close")
+            ))
 
     @reactive.Effect
     @reactive.event(input.btn_run_miner)
@@ -492,7 +737,10 @@ def server(input, output, session):
         m_fitness = input.miner_fitness()
         m_funcs = input.miner_funcs()
         m_monotonicity = input.miner_monotonicity()
-        start_y, end_y = input.year_range()
+        start_y, end_y = input.miner_year_range()
+        m_oos = int(input.miner_oos())
+        m_strategy = input.miner_strategy_type()
+        m_quantile = int(input.miner_quantile())
 
         def _bg_miner():
             try:
@@ -500,7 +748,7 @@ def server(input, output, session):
                 from constituents.universe_builder import get_latest_constituents
                 from factor_miner import discover_alpha_factors
                 
-                miner_cb(5, f"Fetching Baseline DataFrame ({m_universe} Array Subset)...")
+                miner_cb(5, f"Fetching Baseline DataFrame ({m_universe}... 20+ Years)...")
                 tickers = get_latest_constituents(m_universe)[:80] # Proxy subset
                 df = tools.fetch_universe_data(tickers, start_y, end_y, force_refresh=False)
                 
@@ -513,6 +761,9 @@ def server(input, output, session):
                     fitness_metric=m_fitness, 
                     syntax_set=m_funcs, 
                     enforce_monotonicity=m_monotonicity,
+                    oos_percent=m_oos,
+                    strategy_dir=m_strategy,
+                    eval_quantile=m_quantile,
                     progress_callback=miner_cb
                 )
                 
@@ -621,11 +872,15 @@ def server(input, output, session):
     @reactive.Effect
     @reactive.event(miner_results_val)
     def update_mined_dropdown():
-        res = miner_results_val.get()
-        if res:
+        res_payload = miner_results_val.get()
+        if res_payload and isinstance(res_payload, dict):
             choices = {"None": "None"}
-            for i, item in enumerate(res):
-                choices[item["formula"]] = f"Factor {i+1} : {item['formula'][:40]}... (Score: {item['fitness_score']:.3f})"
+            
+            top_combined = res_payload.get("top_combined", [])
+            for i, item in enumerate(top_combined):
+                f_str = item.get("formula", "")
+                choices[f_str] = f"Combined Rank {i+1} : {f_str[:40]}... (IS: {item.get('fitness_score',0):.3f})"
+                
             ui.update_select("mined_formula_dropdown", choices=choices)
 
     @reactive.Effect
@@ -661,6 +916,7 @@ def server(input, output, session):
         strategy_type = input.strategy_type()
         quantile_split = int(input.quantile_split())
         enable_cal_val = input.enable_calendar()
+        vol_target_val = float(input.vol_target())
 
         if custom_formula_opt:
             status_msg.set(f"Initializing Automated Custom Alpha Formula composite...")
@@ -776,6 +1032,7 @@ def server(input, output, session):
                     benchmark_ticker=benchmark_ticker,
                     quantiles=quantile_split,
                     enable_calendar=enable_cal_val,
+                    vol_target=vol_target_val,
                 )
                 progress_state["res"] = json.loads(res_str)
             except Exception as e:
@@ -907,7 +1164,7 @@ def server(input, output, session):
                              theme=ui.value_box_theme(bg=_color(m.get('mean_ic'), 0.02, 0), fg="white")),
                 ui.value_box(tip("IC IR", "Information Ratio of the IC. Determines the consistency of the predictive edge."), _fmt(m.get('ic_ir', 'N/A')),
                              theme=ui.value_box_theme(bg=_color(m.get('ic_ir'), 0.3, 0), fg="white")),
-                ui.value_box(tip("Avg. Turnover", "Average fraction of active capital rotated strictly per-rebalancing event."), _fmt_pct(m.get('avg_turnover', 'N/A')),
+                ui.value_box(tip("Avg. Turnover", "Average fraction of active capital rotated strictly per-rebalancing event. \nFormula: (Σ|Δ Position| / 2) / Σ|Gross Exposure|"), _fmt_pct(m.get('avg_turnover', 'N/A')),
                              theme=ui.value_box_theme(bg=_color(m.get('avg_turnover'), 0.30, 0.80, False), fg="white")),
                 ui.value_box(tip("Universe Size", "Total number of active assets analyzed in the final rebalance."), f"{m.get('n_tickers', '?')}",
                              theme=ui.value_box_theme(bg="#2d3436", fg="white")),

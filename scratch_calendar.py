@@ -3,10 +3,27 @@ import numpy as np
 import datetime
 import calendar
 
-def generate_pnl_calendar_html(strat_ret: pd.Series, daily_holdings: dict = None) -> str:
+def generate_pnl_calendar_html(strat_ret: pd.Series, daily_holdings: dict = None, true_turnover_dates: list = None) -> str:
     str_holdings = {}
+    turnover_dates = set()
     if daily_holdings:
         str_holdings = {k.strftime('%Y-%m-%d') if hasattr(k, 'strftime') else str(k)[:10]: v for k, v in daily_holdings.items()}
+        
+        if true_turnover_dates is not None:
+            turnover_dates = set(true_turnover_dates)
+        else:
+            # Fallback arithmetic calculating literal physical turnover boundaries
+            sorted_dates = sorted(str_holdings.keys())
+            prev_l, prev_s = None, None
+            for d in sorted_dates:
+                curr_l = set(str_holdings[d].get('longs', []))
+                curr_s = set(str_holdings[d].get('shorts', []))
+                if prev_l is not None and prev_s is not None:
+                    if curr_l != prev_l or curr_s != prev_s:
+                        turnover_dates.add(d)
+                else:
+                    turnover_dates.add(d) # Genesis day is explicitly a 100% turnover mapping
+                prev_l, prev_s = curr_l, curr_s
         
     # strat_ret index is datetime, values are floats (returns)
     df = strat_ret.to_frame(name="ret")
@@ -85,9 +102,13 @@ def generate_pnl_calendar_html(strat_ret: pd.Series, daily_holdings: dict = None
                                 l_joined = ",".join(h.get('longs', []))
                                 s_joined = ",".join(h.get('shorts', []))
                                 
+                            turnover_flag = ""
+                            if date_str in turnover_dates:
+                                turnover_flag = "<span style='float:right; margin-left: 3px; font-size: 10px; opacity: 0.8;' title='Portfolio Rebalance / Physical Turnover Triggered'>🔄</span>"
+                                
                             html += f"<td class='trade_day' onclick=\"Shiny.setInputValue('cal_cell_click', '{date_str}|{l_joined}|{s_joined}', {{priority: 'event'}})\">"
                             html += f"<div class='td-content'>"
-                            html += f"<div class='td-header'><span class='daynum'>{day}</span><span class='pnl {r_class}'>{r_str}</span></div>"
+                            html += f"<div class='td-header'><span class='daynum'>{day}</span><span class='pnl {r_class}'>{r_str}{turnover_flag}</span></div>"
                             html += f"</div></td>"
                         else:
                             html += f"<td class='noday'><span class='daynum'>{day}</span></td>"
