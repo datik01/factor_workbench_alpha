@@ -1,47 +1,33 @@
-# 📈 Factor Workbench: AI-Orchestrated Quantitative Backtesting
+# Factor Workbench: Quantitative Backtesting Engine
 
 ![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)
 ![Shiny for Python](https://img.shields.io/badge/Shiny-for--Python-00D4AA.svg)
-![Ollama](https://img.shields.io/badge/LLM-Gemma--4-blue.svg)
 ![Status](https://img.shields.io/badge/Status-Active-success.svg)
 
-Factor Workbench is an institutional-grade, asynchronous quantitative backtesting dashboard built with **Shiny for Python**. It empowers users to simulate cross-sectional multi-factor equity strategies across major indices (Russell 2000, S&P 500, Nasdaq 100) and leverages a **local Multi-Agent AI (Ollama)** architecture to autonomously generate hypotheses, analyze performance, and evaluate portfolio risk.
+Factor Workbench is an institutional-grade, asynchronous quantitative backtesting dashboard built with **Shiny for Python**. It empowers users to simulate cross-sectional multi-factor equity strategies across major indices (Russell 2000, S&P 500, Nasdaq 100). The system autonomously generates analytical hypotheses, processes historical data, and evaluates portfolio risk natively in a highly concurrent environment.
 
 ---
 
-## 🏛️ System Architecture
+## System Architecture
 
-The application seamlessly decouples heavy quantitative workloads and AI inference from the front-end user interface using a robust background execution thread and real-time polling. 
+The application seamlessly decouples heavy quantitative workloads from the front-end user interface using robust background execution threads and real-time polling to prevent UI freezing during 20-year multi-index parameter evolutions.
 
 ```mermaid
 graph TD
-    User([User]) -->|Selects Themes & Parameters| UI[Shiny Dashboard UI]
+    User([User]) -->|Selects Parameters| UI[Shiny Dashboard UI]
     UI -.->|Triggers Async Execution| BgWorker((Background Engine Thread))
     
-    subgraph Multi-Agent AI Orchestration
-        BgWorker -->|Step 1: Formulate Strategy| Agent1[Agent 1: Hypothesis Generator]
-        Agent1 -->|Returns Thesis| BgWorker
-        
-        BgWorker -->|Step 2: Execute & Analyze| Agent2[Agent 2: Quantitative Analyst]
-    end
-    
     subgraph Core Backtesting Engine
-        Agent2 --> Engine[Cross-Sectional Factor Engine]
-        Engine -->|Raw Pricing Data| MarketData[(Polygon.io API / Cache)]
+        BgWorker --> Engine[Cross-Sectional Factor Engine]
+        Engine -->|20-Year Price & Fundamentals| MarketData[(Polygon.io API / Glob Cache)]
         Engine -->|Point-in-Time Matrix| PITFilter[Survivorship-Bias Filter]
-        PITFilter -->|Historical Membership| SECData[(SEC EDGAR N-PORT Data)]
+        PITFilter -->|Historical Membership| SECData[(SEC EDGAR N-PORT / N-Q XML & Regex)]
         
         Engine --> QuantMath[Multi-Factor Ranking Array]
         QuantMath --> Metrics[Performance Metrics & Portfolio Generation]
     end
     
-    Engine -.->|Outputs JSON Metrics & JSON Plots| Agent2
-    Agent2 -->|Writes Analytical Summary| BgWorker
-    
-    subgraph Multi-Agent AI Orchestration Phase 2
-        BgWorker -->|Step 3: Audit Strategy| Agent3[Agent 3: Risk Manager]
-        Agent3 -->|Generates Risk Assessment| BgWorker
-    end
+    Engine -.->|Outputs JSON Metrics| BgWorker
     
     BgWorker -->|Updates State| Reactive[Reactive UI State]
     Reactive -->|Renders Data| UI
@@ -53,35 +39,38 @@ graph TD
 
 ---
 
-## ✨ Key Features
+## Key Features
 
-1. **Multi-Agent Orchestration (`agents.py`)**:
-    - **Hypothesis Generator**: Formulates an initial market thesis based on selected parameters (e.g., Value + Momentum).
-    - **Quant Analyst**: Programmatically interfaces with the backtest tool (`tools.py`), executing the strategy and translating the raw JSON metrics into a readable performance report.
-    - **Risk Manager**: Critiques the Quant Analyst's report, summarizing structural drawdowns and assessing the validity of the strategy constraint variables.
+1. **Fundamental and Technical Factor Availability**:
+    The system is pre-configured and capable of mutating a vast array of both technical and fundamental boundaries natively:
+    - **Fundamental Factors**: Directly evaluates SEC core metrics including Earnings Per Share (EPS), Revenues, Total Equity, Price-to-Earnings Ratio (PE), Price-to-Book (PB), and Price-to-Sales (PS).
+    - **Technical Factors**: Deep mathematical derivations measuring Momentum profiles, Mean-Reversion, 20-day Volatility, Volume metrics, and Firm Size.
+    - **Indicator Generators**: Capable of dynamically spinning up Simple Moving Averages (SMA), Moving Average Convergence Divergence (MACD), and Relative Strength Indexes (RSI) across custom generational intervals natively.
 
-2. **Institutional Data Integrity (`constituents/`)**:
-    - Avoids survivorship bias by deploying a dynamic **Point-In-Time (PIT)** filter.
-    - A dedicated SEC EDGAR N-PORT parser natively scrapes the historical holdings of proxies like `IWM` (Russell 2000) or `SPY` (S&P 500) to ensure the engine only targets assets exactly as they existed on the historical rebalance date.
+2. **Institutional Data Integrity (constituents/)**:
+    - Avoids survivorship bias by deploying a dynamic **Point-In-Time (PIT)** filter across multi-decade evaluation bounds.
+    - A dedicated multi-index SEC EDGAR traversal pipeline natively scrapes historical CUSIP registries. It perfectly resolves structural proxy holdings for IWM (Russell 2000), IVV (S&P 500), and QQQ (Nasdaq 100) back to 2006.
+    - Employs advanced fallback routing mapping unstructured, legacy HTML N-Q and N-CSR filings algorithmically executing strict 9-character CUSIP Regex extractors for deep-history traversals natively missing from modern XML arrays.
 
-3. **Genetic Alpha Miner (`factor_miner.py`)**:
-    - Deploys Symbolic Regression via `gplearn` to autonomously evolve custom, non-linear analytical alpha formulas evaluating rolling factors.
-    - **Algorithmic Expansion**: Allows dynamic routing directly targeting custom, high-performance C-level Numpy vector fitness constraints tracking **Sharpe Ratio** and **Calmar Ratio (PNL/Max Drawdown)**, escaping native `pandas` matrix lag.
-    - **Theoretical Syntax Sets**: Exposes granular parameter control dictating exact structural capabilities to the AI (e.g. *Linear Arithmetic*, *Cross-Sectional Scoring*, *Time-Series Momentum* arrays).
+3. **Genetic Alpha Miner (factor_miner.py)**:
+    - Deploys Symbolic Regression via `gplearn` to autonomously evolve custom, non-linear analytical alpha formulas evaluating rolling price technicals and fundamental metrics synchronously.
+    - **Fundamental Hybridization**: The matrix pool acts as a multi-dimensional solver, deeply injecting 20-year fundamental SEC variables explicitly matched into evolutionary parameters natively alongside technical bounds.
+    - **Algorithmic Expansion**: Allows dynamic routing directly targeting custom, high-performance C-level Numpy vector fitness constraints tracking **Sharpe Ratio** and **Calmar Ratio/Information Coefficients**, bypassing standard matrix padding. It employs strictly absolute Numpy infinity/NaN zero-masks, systematically preventing unadjusted stock split bounds from crashing PyGP matrices.
+    - **Theoretical Syntax Sets**: Exposes granular parameter control dictating exact structural capabilities to the execution logic (e.g. Linear Arithmetic, Cross-Sectional Scoring, Time-Series Momentum arrays).
     - Features strict **Parsimony Penalties** avoiding massive hallucinatory curve-fitting nested trees.
 
-4. **High-Performance Backtest Engine (`tools.py`)**:
-    - Fully vectorized multi-factor arrays evaluating Momentum, Mean Reversion, Volatility, Volume profiles, and Size.
+4. **High-Performance Backtest Engine (tools.py)**:
+    - Fully vectorized multi-factor arrays evaluating constraints natively over the entire cross-section.
     - Dynamic benchmark mapping ensures strategy parameters are cleanly isolated and tracked accurately against their true proxy ETF baseline.
 
 5. **Responsive UI & Threading**:
     - Custom dark-theme aesthetics with dynamic Bootstrap 5 CSS mapping.
     - Completely asynchronous quantitative loops utilizing native Python Threading.
-    - Embedded UI Modals provide granular, smooth, sub-second (Zeno-asymptotic) percentage loader sweeps, eliminating browser locks entirely.
+    - Embedded UI Modals provide granular, smooth, sub-second percentage loader sweeps, eliminating browser locks entirely.
 
 ---
 
-## 🚀 Installation & Setup
+## Installation & Setup
 
 1. **Clone & Virtual Environment Configuration**:
     ```bash
@@ -95,43 +84,35 @@ graph TD
     ```bash
     pip install -r requirements.txt
     ```
-    *Ensure you have `shiny`, `pandas`, `numpy`, `plotly`, `requests`, and `beautifulsoup4`.*
+    *Ensure you have shiny, pandas, numpy, plotly, requests, and beautifulsoup4.*
 
 3. **Provide API Tokens**:
-    In your local root `.env` file, export your required API key to handle the caching and mapping backend:
+    In your local root .env file, export your required API key to handle the caching and mapping backend:
     ```bash
     MASSIVE_API_KEY="your_massive_key_here"
     ```
-    *The `MASSIVE_API_KEY` is fully required for executing the cold-start Cache Rebuild fallback which structurally maps dynamic SEC EDGAR CUSIPs into exact Tickers point-in-time.*
+    *The MASSIVE_API_KEY is fully required for executing the cold-start Cache Rebuild fallback which structurally maps dynamic SEC EDGAR CUSIPs into exact Tickers point-in-time.*
 
-4. **Run the AI Local Node**:
-    The system relies entirely on local, private inference via Ollama. Ensure your Ollama node is actively hosting the defined model (e.g., Gemma).
+4. **(Optional) Bypass API Limits via Cache**:
+    To avoid downloading 20+ years of data per ticker locally, you can download the `factor_cache_v2.zip` database directly from the Releases tab on this Github repository. 
     ```bash
-    ollama serve
+    unzip factor_cache_v2.zip -d .
     ```
+    *Note: If you clone the repository entirely empty and skip downloading the cache, the application will safely catch the Missing Data constraint dynamically. Instead of crashing, it will spawn an automatic Cold Start Handler locally extracting point-in-time assets directly from SEC EDGAR proxies spanning 20 years natively across S&P 500/R2K and Nasdaq. It evaluates and intelligently overrides persistent wildcard parquet caches automatically inside the physical .cache/ footprint.*
 
-5. **(Optional) Bypass API Limits via Cache**:
-    To avoid downloading 4+ years of data per ticker locally, you can download the `factor_cache_v1.zip` database directly from the **Releases** tab on this Github repository. 
-    ```bash
-    unzip factor_cache_v1.zip -d .
-    ```
-    *Note: If you clone the repository entirely empty and skip downloading the cache, the application will safely catch the Missing Data constraint dynamically. Instead of crashing, it will spawn an automatic "Cold Start Handler" locally extracting point-in-time assets directly from SEC EDGAR XMLs mapped by the Massive API. This fallback takes ~5-10 minutes.*
-
-6. **Initialize application**:
+5. **Initialize application**:
     ```bash
     shiny run --reload app.py
     ```
 
+## Testing Protocol
 
-
-## 🧪 Testing Protocol
-
-The platform explicitly tests mathematical mapping integrations utilizing `unittest.mock`. 
+The platform explicitly tests mathematical mapping integrations utilizing unittest.mock. 
 Run the integrated test suite locally utilizing:
 ```bash
 python3 -m unittest tests/test_engine.py
 ```
-This rapidly simulates execution paths, explicitly testing scaling nodes, `nonlocal` backend thread bindings, and structural matrix alignment (Sharpe, Returns) validating exact mappings between the baseline Index APIs and the backtest framework. 
+This rapidly simulates execution paths, explicitly testing scaling nodes, nonlocal backend thread bindings, and structural matrix alignment validating exact mappings between the baseline Index APIs and the backtest framework. 
 
 ---
 
