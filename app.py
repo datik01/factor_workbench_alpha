@@ -30,21 +30,7 @@ packaging.version.Version = _patched_Version
 
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 
-# Primary source: SEC EDGAR N-PORT extracted ticker list
-_ticker_cache = os.path.join(_script_dir, ".cache", "constituents", "r2k_tickers_latest.txt")
-if os.path.exists(_ticker_cache):
-    with open(_ticker_cache) as _f:
-        ALL_TICKERS = [t.strip() for t in _f.readlines() if t.strip()]
-else:
-    # Fallback: approximate CSV
-    try:
-        tickers_df = pd.read_csv(os.path.join(_script_dir, "r2k_approx.csv"), header=None)
-        ALL_TICKERS = [t for t in tickers_df[0].dropna().tolist() if isinstance(t, str) and t.isalpha() and len(t) <= 5]
-    except Exception:
-        ALL_TICKERS = []
-
-UNIVERSE_SIZE = len(ALL_TICKERS)
-_TICKER_SOURCE = "SEC EDGAR N-PORT" if os.path.exists(_ticker_cache) else "Approximate CSV"
+# Core Engine successfully dynamically loads constituents arrays.
 
 try:
     from constituents.universe_builder import build_constituent_timeline
@@ -261,9 +247,9 @@ label.control-label {
 }
 
 /* ── Select Input ── */
-.selectize-input {
-    background: var(--bg-elevated) !important;
-    border-color: var(--border) !important;
+.selectize-input, .form-control, .form-select {
+    background-color: var(--bg-elevated) !important;
+    border: 2px solid var(--border) !important;
     color: var(--text-primary) !important;
     border-radius: 10px !important;
 }
@@ -363,7 +349,7 @@ app_ui = ui.page_fluid(
                 ui.input_select("portfolio_sizing_type", tip("Portfolio Sizing Logic", "Allocate capital by fixed asset bounds or by dynamic universe percentages."), choices=["Absolute Count", "Percentage"], selected="Absolute Count"),
                 ui.input_numeric("portfolio_size", tip("Portfolio Size / Percent limit", "Enter absolute count of assets (e.g., 100) or total universe percentage (e.g., 20)"), value=100),
                 ui.input_numeric("initial_aum", tip("Initial AUM ($)", "Starting simulation capital dictating absolute dollar returns."), value=1000000),
-                ui.input_slider("year_range", tip("Analysis Period", "Historical year boundaries for testing."), min=2021, max=datetime.now().year, value=(2021, datetime.now().year), sep=""),
+                ui.input_slider("year_range", tip("Analysis Period", "Historical year boundaries for testing."), min=2006, max=datetime.now().year, value=(2021, datetime.now().year), sep=""),
                 ui.input_select("rebalance_freq", tip("Rebalance Frequency", "How often the algorithm recalculates ranks and shifts portfolio capital."), 
                                 choices={"D": "Daily", "W": "Weekly", "M": "Monthly", "Q": "Quarterly", "Y": "Yearly"}, 
                                 selected="M"),
@@ -425,7 +411,7 @@ import threading
 
 def server(input, output, session):
     workflow_result = reactive.Value(None)
-    status_msg = reactive.Value(f"Ready — {UNIVERSE_SIZE} tickers loaded.")
+    status_msg = reactive.Value("Ready — SEC Engine Synchronized.")
     
     is_running = reactive.Value(False)
     cancel_flag = False
