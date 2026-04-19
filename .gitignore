@@ -7,4 +7,3 @@ venv/
 .DS_Store
 *.log
 factor_cache_v1.zip
-factor_cache*.zip

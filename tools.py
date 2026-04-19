@@ -23,7 +23,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 import requests
-from scratch_calendar import generate_pnl_calendar_html
+from pnl_calendar import generate_pnl_calendar_html
 
 # ═══════════════════════════════════════════════════════════════
 # Configuration
